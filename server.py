@@ -21,8 +21,9 @@ from sam3.model_builder import build_sam3_image_model
 from sam3.model.sam3_image_processor import Sam3Processor
 from sam3.visualization_utils import plot_results
 
-# 导入ros_api（确保ros_api.py与当前文件在同一目录）
+# 导入重构后的ros_api（确保包含TrackingDataClient和TrackingResult等类型）
 import ros_api
+from ros_api import TrackingResult, CameraIntrinsics, CameraPose  # 导入强类型数据结构
 
 # ===================== 配置常量 =====================
 # 模型配置
@@ -49,6 +50,9 @@ DEPTH_PLOT_SAVE_PREFIX = "images/depth_comparison_"
 DA3_DEPTH_SAVE_PREFIX = "images/da3_depth_"
 DA3_DEPTH_WITH_KEYPOINTS_SAVE_PREFIX = "images/da3_depth_with_keypoints_"
 
+# 确保图像保存目录存在
+os.makedirs("images", exist_ok=True)
+
 # ===================== 全局对象 =====================
 app = None
 processor = None
@@ -56,76 +60,72 @@ model_vlm = None
 model_da3 = None
 processor_sam3 = None
 
-def init_tracking_client() -> ros_api.TrackingDataClient | None:
+def init_tracking_client(enable_log: bool = False) -> ros_api.TrackingDataClient:
     """
-    新建并返回ROS跟踪数据客户端实例（每次调用新建连接）
-    :return: 成功返回TrackingDataClient实例，失败返回None
+    新建并返回ROS跟踪数据客户端实例（每次调用新建连接，适配重构版客户端）
+    :param enable_log: 是否启用客户端日志（默认关闭，避免与Flask日志冲突）
+    :return: TrackingDataClient实例（无需提前连接，闭环方法内部处理连接）
     """
     try:
-        # 实例化ros_api客户端
+        # 实例化重构版ros_api客户端（仅初始化，不提前连接）
         client = ros_api.TrackingDataClient(
             server_ip=ROS_SERVER_IP,
-            port=ROS_SERVER_PORT
+            port=ROS_SERVER_PORT,
+            enable_log=enable_log  # 关闭客户端日志，由Flask统一输出
         )
-        # 连接到ROS服务器
-        if client.connect_to_server():
-            return client
-        else:
-            print(f"[{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}] ❌ 无法连接到ROS服务器")
-            return None
+        return client
     except Exception as e:
-        print(f"[{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}] ❌ 跟踪客户端创建失败: {str(e)}")
-        return None
+        error_time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        print(f"[{error_time}] ❌ 跟踪客户端创建失败: {str(e)}")
+        raise Exception(f"跟踪客户端创建失败: {str(e)}")
 
 def get_image_from_ros(client: ros_api.TrackingDataClient, timestamp: str) -> tuple[Image.Image, str, np.ndarray, np.ndarray, np.ndarray] | tuple[None, str, None, None, None]:
     """
-    从传入的ROS客户端获取图像、点云数据并转换为PIL Image，同时返回原始OpenCV图像
-    :param client: 新建的TrackingDataClient实例（每次请求新建）
+    从传入的ROS客户端获取图像、点云数据并转换为PIL Image（适配闭环方法+强类型返回值）
+    :param client: 重构版TrackingDataClient实例
     :param timestamp: 时间戳（用于生成图像文件名）
-    :return: (PIL图像对象, 图像保存路径, 相机坐标点云, 世界坐标点云, 原始OpenCV图像) 或 (None, 错误信息, None, None, None)
+    :return: (PIL图像对象, 图像保存路径, 相机坐标点云, 世界坐标点云, 原始OpenCV图像) 或错误元组
     """
-    # 移除全局tracking_client引用，直接使用传入的client
     if not client:
         return None, "ROS客户端实例无效", None, None, None
     
     try:
-        # 1. 发送请求到ROS服务器
-        if not client.send_request():
-            return None, "发送请求到ROS服务器失败", None, None, None
+        # ============== 核心重构：调用闭环方法一键完成全流程 ==============
+        print(f"[{timestamp}] 🔍 开始执行ROS数据闭环获取流程...")
+        tracking_result: TrackingResult | None = client.complete_tracking_pipeline()
         
-        # 2. 解析字节流数据
-        parsed_data = client.parse_byte_stream()
-        if not parsed_data:
-            return None, "解析ROS字节流数据失败", None, None, None
+        # 校验闭环方法返回结果（强类型对象）
+        if not tracking_result:
+            return None, "ROS数据闭环获取失败（连接/解析/请求任一环节出错）", None, None, None
         
-        # 3. 提取OpenCV图像（保留原始图像，用于后续匹配深度图尺寸）
-        cv_image = parsed_data.get("current_image")
+        # ============== 从强类型TrackingResult中提取数据（替换原字典取值） ==============
+        # 1. 提取OpenCV图像（保留原始图像，用于后续匹配深度图尺寸）
+        cv_image = tracking_result.current_image
         if cv_image is None or not isinstance(cv_image, np.ndarray):
-            return None, "从ROS数据中提取图像失败", None, None, None
+            return None, "从ROS闭环结果中提取图像失败", None, None, None
         
-        # 4. 提取ORB-SLAM3点云数据（相机坐标，x/y=像素坐标，z=实际深度）
-        camera_point_cloud = parsed_data.get("tracked_points_camera", np.array([]))
-        world_point_cloud = parsed_data.get("tracked_points_world", np.array([]))
+        # 2. 提取ORB-SLAM3点云数据（相机坐标/世界坐标）
+        camera_point_cloud = tracking_result.tracked_points_camera
+        world_point_cloud = tracking_result.tracked_points_world
         
-        # 5. OpenCV图像转换为PIL Image（CV2: BGR → PIL: RGB）
+        # 3. OpenCV图像转换为PIL Image（CV2: BGR → PIL: RGB）
         cv_image_rgb = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(cv_image_rgb)
         
-        # 6. 保存图像到本地
+        # 4. 保存图像到本地
         image_save_path = f"{IMAGE_SAVE_PREFIX}{timestamp}.jpg"
         pil_image.save(image_save_path)
         print(f"[{timestamp}] 💾 保存处理后图像到: {image_save_path}（尺寸：{pil_image.size}，模式：{pil_image.mode}）")
+        print(f"[{timestamp}] 📊 ROS数据闭环获取统计：总接收{tracking_result.total_recv_size}字节，解析耗时{tracking_result.parse_cost_ms:.2f}ms")
         
         return pil_image, image_save_path, camera_point_cloud, world_point_cloud, cv_image
+    
     except Exception as e:
-        error_msg = f"从ROS获取图像失败: {str(e)}"
+        error_msg = f"从ROS闭环结果处理数据失败: {str(e)}"
+        print(f"[{timestamp}] ❌ {error_msg}")
         return None, error_msg, None, None, None
-    finally:
-        # 无论成功与否，最终关闭当前请求的ROS连接
-        if client:
-            client.close_connection()
 
-# ===================== 模型加载模块 =====================
+# ===================== 模型加载模块（无修改，保持原有逻辑） =====================
 def load_model_vlm(model_path: str = MODEL_VLM_DEFAULT):
     """
     加载并编译AI模型
@@ -171,7 +171,7 @@ def load_model_sam3(model_path=MODEL_SAM3_PATH):
     processor_sam3 = Sam3Processor(model)
     print(f"{time.time()} > ✅ SAM3 模型加载并编译完成！", flush=True)
 
-# ===================== 深度生成模块 =====================
+# ===================== 深度生成模块（无修改，保持原有逻辑） =====================
 def generate_depth_map(image_path: str, target_shape: tuple[int, int]):
     """
     生成指定尺寸的深度图，使用INTER_CUBIC插值进行缩放，匹配原始图像尺寸
@@ -201,7 +201,7 @@ def generate_depth_map(image_path: str, target_shape: tuple[int, int]):
     
     return depth_map_resized
 
-# ===================== 深度对比绘图模块 =====================
+# ===================== 深度对比绘图模块（无修改，保持原有逻辑） =====================
 def plot_depth_comparison(camera_point_cloud: np.ndarray, da3_depth_map: np.ndarray, timestamp: str, image_shape: tuple[int, int]):
     """
     严格根据camera_point_cloud的x/y（像素坐标）提取对应DA3深度，z轴为实际深度，绘制关系图并保存
@@ -374,7 +374,6 @@ def save_da3_depth_with_ros_keypoints(da3_depth_map: np.ndarray, camera_point_cl
             # ============== 归一化逻辑修复完成 ==============
             
             # 兼容高版本Matplotlib，获取plasma色卡
-            import matplotlib
             plasma_cmap = matplotlib.colormaps['plasma']  # 与DA3深度图着色色卡保持一致
             
             for idx, (w, h) in enumerate(zip(valid_pixel_w, valid_pixel_h)):
@@ -424,7 +423,7 @@ def save_da3_depth_with_ros_keypoints(da3_depth_map: np.ndarray, camera_point_cl
     cv2.imwrite(da3_depth_keypoints_save_path, da3_depth_with_keypoints)
     print(f"[{timestamp}] 💾 叠加ROS关键点的DA3深度图保存到: {da3_depth_keypoints_save_path}")
 
-# ===================== 文本生成模块 =====================
+# ===================== 文本生成模块（无修改，保持原有逻辑） =====================
 def generate_text_stream(text_query: str, image_path: str, timestamp: str):
     """
     流式生成文本响应
@@ -490,7 +489,7 @@ def generate_text_stream(text_query: str, image_path: str, timestamp: str):
         error_msg = f"文本生成失败: {str(e)}"
         yield f"data: {json.dumps({'text': f'❌ {error_msg}'})}\n\n"
 
-# ===================== Flask接口模块 =====================
+# ===================== Flask接口模块（仅适配客户端调用重构，其余不变） =====================
 def init_flask_app():
     """
     初始化Flask应用
@@ -507,13 +506,13 @@ def init_flask_app():
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         
         try:
-            # 2. 每次请求新建ROS客户端并建立连接
-            print(f"[{timestamp}] 🔍 新建ROS客户端并建立连接...")
-            ros_client = init_tracking_client()
+            # 2. 每次请求新建ROS客户端（重构版，无需提前连接）
+            print(f"[{timestamp}] 🔍 新建ROS客户端实例...")
+            ros_client = init_tracking_client(enable_log=False)
             if not ros_client:
-                raise Exception("新建ROS客户端并连接失败")
+                raise Exception("新建ROS客户端实例失败")
             
-            # 3. 传入新建的ros_client，从ROS获取图像和点云数据
+            # 3. 传入新建的ros_client，从ROS获取图像和点云数据（适配闭环方法）
             print(f"[{timestamp}] 🔍 开始从ROS获取图像和点云数据...")
             pil_image, image_path, camera_point_cloud, world_point_cloud, cv_image = get_image_from_ros(ros_client, timestamp)
             if not pil_image:
@@ -541,19 +540,19 @@ def init_flask_app():
             print(error_msg)
             return jsonify({'error': error_msg}), 500
 
-# ===================== 主程序入口 =====================
+# ===================== 主程序入口（无修改，保持原有逻辑） =====================
 def main():
     """主程序：协调各模块初始化，启动服务"""
     try:
         # 1. 初始化Flask应用
         init_flask_app()
         
-        # 3. 加载各类AI模型
+        # 2. 加载各类AI模型
         load_model_vlm(MODEL_VLM_DEFAULT)
         load_model_da3(MODEL_DA3_DEFAULT)
         # load_model_sam3(MODEL_SAM3_PATH)
         
-        # 4. 启动Flask服务
+        # 3. 启动Flask服务
         print(f"\n[{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}] 🚀 Flask服务启动中，地址: http://{FLASK_HOST}:{FLASK_PORT}")
         app.run(
             host=FLASK_HOST,
