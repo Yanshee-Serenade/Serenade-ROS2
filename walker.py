@@ -70,6 +70,8 @@ class WalkerState(Enum):
     TURN_LEFT = "turn_left"
     TURN_RIGHT = "turn_right"
     WALK = "walk"
+    SQUAT = "squat"
+    DEFAULT = "default"
 
 class GaitStep:
     """步态相位类，包含一个时刻的所有关节角度"""
@@ -188,8 +190,6 @@ class RobotWalker:
     def _initialize_gait_sequences(self) -> Dict[WalkerState, List[GaitStep]]:
         """初始化所有步态序列"""
         sequences = {}
-        
-        # TurnLeft 步态序列
         sequences[WalkerState.TURN_LEFT] = [
             GaitStep(self.solver, self.grid_size, 
                      (-0.02, 0.061, 0.0), (0.02, 0.06, 0.0)),
@@ -200,8 +200,6 @@ class RobotWalker:
             GaitStep(self.solver, self.grid_size,
                      (-0.04, 0.061, -0.02), (0.04, 0.06, 0.02)),
         ]
-        
-        # TurnRight 步态序列
         sequences[WalkerState.TURN_RIGHT] = [
             GaitStep(self.solver, self.grid_size,
                      (-0.02, 0.06, 0.0), (0.02, 0.064, 0.0)),
@@ -212,8 +210,6 @@ class RobotWalker:
             GaitStep(self.solver, self.grid_size,
                      (-0.04, 0.06, 0.02), (0.04, 0.064, -0.02)),
         ]
-        
-        # Walk 步态序列
         sequences[WalkerState.WALK] = [
             GaitStep(self.solver, self.grid_size,
                      (-0.02, 0.062, 0.03), (0.02, 0.06, -0.01))
@@ -232,6 +228,20 @@ class RobotWalker:
                 .set_left_lean(15).set_right_lean(15)
                 .set_right_ankle_lean(-3).set_left_arm(35).set_right_arm(-35),
         ]
+        sequences[WalkerState.SQUAT] = [
+            GaitStep(self.solver, self.grid_size, 
+                     (-0.02, 0.09, 0.0), (0.02, 0.09, 0.0)),
+            GaitStep(self.solver, self.grid_size, 
+                     (-0.02, 0.065, 0.0), (0.02, 0.065, 0.0)),
+            GaitStep(self.solver, self.grid_size, 
+                     (-0.02, 0.04, 0.0), (0.02, 0.04, 0.0)),
+            GaitStep(self.solver, self.grid_size, 
+                     (-0.02, 0.065, 0.0), (0.02, 0.065, 0.0)),
+        ]
+        sequences[WalkerState.DEFAULT] = [
+            GaitStep(self.solver, self.grid_size, 
+                     (-0.02, 0.04, 0.0), (0.02, 0.04, 0.0)),
+        ]
         
         return sequences
     
@@ -247,6 +257,9 @@ class RobotWalker:
         """重置到初始状态"""
         self.current_phase = 0
         self.last_action_time = time.time() * 1000
+        step = self.gait_sequences[WalkerState.DEFAULT][0]
+        angles = step.angles
+        self._apply_angles(angles)
     
     def update(self):
         """更新步态相位，应在循环中调用"""
@@ -263,16 +276,18 @@ class RobotWalker:
         if self.current_phase < len(self.current_sequence):
             step = self.current_sequence[self.current_phase]
             angles = step.angles
-            
-            # 发送到机器人客户端
-            try:
-                success, msg = self.client.set_joint_angles(angles, time_ms=self.period_ms)
-                if success:
-                    print(f"成功发送角度指令")
-                else:
-                    print(f"发送失败: {msg}")
-            except Exception as e:
-                print(f"发送角度时出错: {e}")
+            self._apply_angles(angles)
+    
+    def _apply_angles(self, angles):
+        """发送到机器人客户端"""
+        try:
+            success, msg = self.client.set_joint_angles(angles, time_ms=self.period_ms)
+            if success:
+                print(f"成功发送角度指令")
+            else:
+                print(f"发送失败: {msg}")
+        except Exception as e:
+            print(f"发送角度时出错: {e}")
     
     def run_sequence(self, state: WalkerState, cycles: int = 4):
         """
@@ -284,16 +299,12 @@ class RobotWalker:
         """
         self.set_state(state)
         self.reset()
+        time.sleep(self.period_ms / 1000.0)
         
         total_phases = len(self.current_sequence) * cycles
-        
-        client = TrackingDataClient(server_ip='127.0.0.1', port=51121, enable_log=False)
         print(f"开始运行 {state.value} 步态，共 {cycles} 个周期 ({total_phases} 个相位)")
         
         for i in range(total_phases):
-            result = client.complete_tracking_pipeline()
-            if result:
-                print(result.camera_pose)
             self._apply_current_phase()
             self.current_phase = (self.current_phase + 1) % len(self.current_sequence)
             
@@ -325,19 +336,11 @@ def main():
     
     # 3. 创建Walker
     print("\n3. 创建Walker控制器...")
-    walker = RobotWalker(solver, angle_client, grid_size=12, period_ms=200)
+    walker = RobotWalker(solver, angle_client, grid_size=12, period_ms=400)
     print(f"   √ Walker创建成功，周期: {walker.period_ms}ms")
     
     # 4. 测试不同步态
     print("\n4. 开始步态测试...")
-    
-    # 测试转向左
-    # print("\n  测试转向左步态:")
-    # walker.run_sequence(WalkerState.TURN_LEFT, cycles=8)
-    
-    # # 测试转向右
-    # print("\n  测试转向右步态:")
-    # walker.run_sequence(WalkerState.TURN_RIGHT, cycles=8)
     
     # 测试行走
     print("\n  测试行走步态:")
