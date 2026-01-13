@@ -1,10 +1,10 @@
 import time
-import numpy as np
 import ctypes
 import math
 from typing import List, Dict, Tuple, Optional
 from enum import Enum
-from ros_api import JointAngleTCPClient, TrackingDataClient
+from ros_api import JointAngleTCPClient
+import YanAPI
 
 class MockClient:
     def set_joint_angles(self, angles, time_ms=200):
@@ -147,7 +147,7 @@ class GaitStep:
         return self
     
     def set_neck(self, angle: float) -> 'GaitStep':
-        """设置脖子角度"""
+        """设置脖子向右旋转角度"""
         self.joint_angles[16] += angle
         return self
     
@@ -186,6 +186,9 @@ class RobotWalker:
         # 计时相关
         self.last_action_time = time.time() * 1000  # 转换为毫秒
         self.running = False
+
+        # 角度设置 API
+        YanAPI.yan_api_init("raspberrypi")
     
     def _initialize_gait_sequences(self) -> Dict[WalkerState, List[GaitStep]]:
         """初始化所有步态序列"""
@@ -212,31 +215,25 @@ class RobotWalker:
         ]
         sequences[WalkerState.WALK] = [
             GaitStep(self.solver, self.grid_size,
-                     (-0.02, 0.062, 0.03), (0.02, 0.06, -0.01))
-                .set_left_lean(15).set_right_lean(15)
-                .set_right_ankle_lean(-3).set_right_arm(35).set_left_arm(-35),
+                     (-0.02, 0.065, 0.03), (0.02, 0.06, -0.01))
+                .set_left_lean(15).set_right_lean(15).set_neck(5)
+                .set_right_ankle_lean(-3).set_right_arm(45).set_left_arm(-45),
             GaitStep(self.solver, self.grid_size,
                      (-0.02, 0.06, 0.03), (0.02, 0.065, -0.01))
-                .set_left_lean(15).set_right_lean(15)
-                .set_left_ankle_lean(-3).set_left_arm(-35).set_right_arm(35),
+                .set_left_lean(15).set_right_lean(15).set_neck(5)
+                .set_left_ankle_lean(-3).set_left_arm(-45).set_right_arm(45),
             GaitStep(self.solver, self.grid_size,
                      (-0.02, 0.06, -0.01), (0.02, 0.065, 0.03))
-                .set_left_lean(15).set_right_lean(15)
-                .set_left_ankle_lean(-3).set_left_arm(35).set_right_arm(-35),
+                .set_left_lean(15).set_right_lean(15).set_neck(-5)
+                .set_left_ankle_lean(-3).set_left_arm(45).set_right_arm(-45),
             GaitStep(self.solver, self.grid_size,
-                     (-0.02, 0.062, -0.01), (0.02, 0.06, 0.03))
-                .set_left_lean(15).set_right_lean(15)
-                .set_right_ankle_lean(-3).set_left_arm(35).set_right_arm(-35),
+                     (-0.02, 0.065, -0.01), (0.02, 0.06, 0.03))
+                .set_left_lean(15).set_right_lean(15).set_neck(-5)
+                .set_right_ankle_lean(-3).set_left_arm(45).set_right_arm(-45),
         ]
         sequences[WalkerState.SQUAT] = [
             GaitStep(self.solver, self.grid_size, 
                      (-0.02, 0.09, 0.0), (0.02, 0.09, 0.0)),
-            GaitStep(self.solver, self.grid_size, 
-                     (-0.02, 0.065, 0.0), (0.02, 0.065, 0.0)),
-            GaitStep(self.solver, self.grid_size, 
-                     (-0.02, 0.04, 0.0), (0.02, 0.04, 0.0)),
-            GaitStep(self.solver, self.grid_size, 
-                     (-0.02, 0.065, 0.0), (0.02, 0.065, 0.0)),
         ]
         sequences[WalkerState.DEFAULT] = [
             GaitStep(self.solver, self.grid_size, 
@@ -257,9 +254,7 @@ class RobotWalker:
         """重置到初始状态"""
         self.current_phase = 0
         self.last_action_time = time.time() * 1000
-        step = self.gait_sequences[WalkerState.DEFAULT][0]
-        angles = step.angles
-        self._apply_angles(angles)
+        self.run_frame(WalkerState.DEFAULT, 0)
     
     def update(self):
         """更新步态相位，应在循环中调用"""
@@ -281,13 +276,24 @@ class RobotWalker:
     def _apply_angles(self, angles):
         """发送到机器人客户端"""
         try:
-            success, msg = self.client.set_joint_angles(angles, time_ms=self.period_ms)
-            if success:
-                print(f"成功发送角度指令")
-            else:
-                print(f"发送失败: {msg}")
+            # success, msg = self.client.set_joint_angles(angles, time_ms=self.period_ms)
+            angles_dict = YanAPI.convert_angles_to_dict(angles)
+            result = YanAPI.set_servos_angles(angles_dict, self.period_ms)
+            print(result)
         except Exception as e:
             print(f"发送角度时出错: {e}")
+    
+    def run_frame(self, state: WalkerState, frame: int = 0):
+        """
+        固定到指定步态的某个周期
+        
+        Args:
+            state: 步态类型
+            frame: 目标周期数
+        """
+        step = self.gait_sequences[state][frame]
+        angles = step.angles
+        self._apply_angles(angles)
     
     def run_sequence(self, state: WalkerState, cycles: int = 4):
         """
@@ -316,18 +322,11 @@ class RobotWalker:
 # ================================
 # 4. 测试主程序
 # ================================
-def main():
-    """主测试函数"""
-    print("=== 逆运动学步态测试 ===\n")
-    
+def create_walker(period_ms: int = 200) -> RobotWalker:
     # 1. 初始化逆运动学求解器
     print("1. 初始化逆运动学求解器...")
-    try:
-        solver = KinematicsSolver("./libyanshee_kinematics.so")
-        print("   √ 逆运动学求解器初始化成功")
-    except Exception as e:
-        print(f"   × 逆运动学求解器初始化失败: {e}")
-        return
+    solver = KinematicsSolver("./libyanshee_kinematics.so")
+    print("   √ 逆运动学求解器初始化成功")
     
     # 2. 初始化机器人客户端（模拟）
     print("\n2. 初始化机器人客户端...")
@@ -336,17 +335,6 @@ def main():
     
     # 3. 创建Walker
     print("\n3. 创建Walker控制器...")
-    walker = RobotWalker(solver, angle_client, grid_size=12, period_ms=400)
+    walker = RobotWalker(solver, angle_client, grid_size=12, period_ms=period_ms)
     print(f"   √ Walker创建成功，周期: {walker.period_ms}ms")
-    
-    # 4. 测试不同步态
-    print("\n4. 开始步态测试...")
-    
-    # 测试行走
-    print("\n  测试行走步态:")
-    walker.run_sequence(WalkerState.WALK, cycles=8)
-    
-    print("\n=== 测试完成 ===")
-
-if __name__ == "__main__":
-    main()
+    return walker

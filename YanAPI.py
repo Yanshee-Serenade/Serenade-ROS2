@@ -43,6 +43,51 @@ headers = {'Content-Type': 'application/json'}
 #     return inet_ntoa(fcntl.ioctl(s.fileno(), 0x8915, struct.pack('256s', ifname[:15]))[20:24])
 
 
+def convert_angles_to_dict(angles):
+    """
+    将17个舵机角度数组转换为舵机设置参数的字典
+    
+    Args:
+        angles (list): 17个舵机角度值的列表，每个值在0-180之间
+        
+    Returns:
+        dict: 舵机名称到设置参数的映射
+    """
+    # 舵机名称列表，按照1-17号舵机顺序
+    servo_names = [
+        'RightShoulderRoll',    # 1号舵机
+        'RightShoulderFlex',    # 2号舵机
+        'RightElbowFlex',       # 3号舵机
+        'LeftShoulderRoll',     # 4号舵机
+        'LeftShoulderFlex',     # 5号舵机
+        'LeftElbowFlex',        # 6号舵机
+        'RightHipLR',           # 7号舵机
+        'RightHipFB',           # 8号舵机
+        'RightKneeFlex',        # 9号舵机
+        'RightAnkleFB',         # 10号舵机
+        'RightAnkleUD',         # 11号舵机
+        'LeftHipLR',            # 12号舵机
+        'LeftHipFB',            # 13号舵机
+        'LeftKneeFlex',         # 14号舵机
+        'LeftAnkleFB',          # 15号舵机
+        'LeftAnkleUD',          # 16号舵机
+        'NeckLR'                # 17号舵机
+    ]
+    
+    # 检查输入参数的有效性
+    if not isinstance(angles, list) or len(angles) != 17:
+        raise ValueError("angles必须是一个长度为17的列表")
+    
+    # 创建结果字典
+    angles_dict = {}
+    
+    # 遍历每个舵机，检查角度值是否有效
+    for i, (servo_name, angle) in enumerate(zip(servo_names, angles), 1):
+        angles_dict[servo_name] = round(angle)
+    
+    return angles_dict
+
+
 def yan_api_init(robot_ip: str):
     """初始化sdk
 

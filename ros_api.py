@@ -754,3 +754,59 @@ class ROSParamClient:
             print(f"Error: Could not connect to {self.host}:{self.port}")
         except Exception as e:
             print(f"Error sending param: {e}")
+
+
+class CameraPoseClient:
+    def __init__(self, host='localhost', port=51118):
+        self.host = host
+        self.port = port
+        self.sock = None
+        self._shutdown = False
+
+    def connect(self):
+        """Connects to the server with retries."""
+        try:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # Set a timeout so we can exit cleanly if needed
+            self.sock.settimeout(None) 
+            self.sock.connect((self.host, self.port))
+            print(f"Connected to {self.host}:{self.port}")
+            return True
+        except ConnectionRefusedError:
+            print(f"Connection failed: {self.host}:{self.port}")
+            return False
+
+    def stream(self):
+        """
+        Generator yielding (topic_type, data_dict).
+        topic_type will be 'raw' or 'estimated'.
+        """
+        if not self.sock and not self.connect():
+            return
+
+        # 'makefile' buffers the stream efficiently for line-by-line reading
+        f_obj = self.sock.makefile('r', encoding='utf-8')
+
+        try:
+            for line in f_obj:
+                if self._shutdown: break
+                try:
+                    data = json.loads(line.strip())
+                    # Yield the label and the full data object
+                    yield data['topic'], data
+                except (json.JSONDecodeError, KeyError):
+                    continue
+        except (ConnectionResetError, BrokenPipeError, OSError):
+            print("Stream ended (server disconnected).")
+        finally:
+            self.close()
+
+    def close(self):
+        self._shutdown = True
+        if self.sock:
+            try:
+                self.sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            self.sock.close()
+            self.sock = None
