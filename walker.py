@@ -4,17 +4,6 @@ import math
 from typing import List, Dict, Tuple, Optional
 from enum import Enum
 from ros_api import JointAngleTCPClient
-import threading
-import YanAPI
-
-def _move_neck(angle, runtime):
-    """线程函数：控制脖子舵机转动"""
-    result = YanAPI.set_servos_angles({"NeckLR": angle}, runtime)
-    print(result)
-
-def move_neck(angle, runtime):
-    threading.Thread(target=_move_neck, args=(round(angle), round(runtime / 2))).start()
-
 
 class MockClient:
     def set_joint_angles(self, angles, time_ms=200):
@@ -196,9 +185,6 @@ class RobotWalker:
         # 计时相关
         self.last_action_time = time.time() * 1000  # 转换为毫秒
         self.running = False
-
-        # 角度设置 API
-        YanAPI.yan_api_init("raspberrypi")
     
     def _initialize_gait_sequences(self) -> Dict[WalkerState, List[GaitStep]]:
         """初始化所有步态序列"""
@@ -208,18 +194,10 @@ class RobotWalker:
                      (-0.02, 0.061, 0.0), (0.02, 0.06, 0.0)),
             GaitStep(self.solver, self.grid_size,
                      (-0.04, 0.061, -0.02), (0.04, 0.06, 0.02)),
-            GaitStep(self.solver, self.grid_size,
-                     (-0.06, 0.061, -0.04), (0.06, 0.06, 0.04)),
-            GaitStep(self.solver, self.grid_size,
-                     (-0.04, 0.061, -0.02), (0.04, 0.06, 0.02)),
         ]
         sequences[WalkerState.TURN_RIGHT] = [
             GaitStep(self.solver, self.grid_size,
                      (-0.02, 0.06, 0.0), (0.02, 0.064, 0.0)),
-            GaitStep(self.solver, self.grid_size,
-                     (-0.04, 0.06, 0.02), (0.04, 0.064, -0.02)),
-            GaitStep(self.solver, self.grid_size,
-                     (-0.06, 0.06, 0.04), (0.06, 0.064, -0.04)),
             GaitStep(self.solver, self.grid_size,
                      (-0.04, 0.06, 0.02), (0.04, 0.064, -0.02)),
         ]
@@ -227,7 +205,7 @@ class RobotWalker:
             GaitStep(self.solver, self.grid_size,
                      (-0.02, 0.065, 0.03), (0.02, 0.06, -0.01))
                 .set_left_lean(15).set_right_lean(15).set_neck(5)
-                .set_right_ankle_lean(-3).set_right_arm(45).set_left_arm(-45),
+                .set_right_ankle_lean(-3).set_left_arm(-45).set_right_arm(45),
             GaitStep(self.solver, self.grid_size,
                      (-0.02, 0.06, 0.03), (0.02, 0.065, -0.01))
                 .set_left_lean(15).set_right_lean(15).set_neck(5)
@@ -291,9 +269,6 @@ class RobotWalker:
                 print(f"发送角度失败: {msg}")
         except Exception as e:
             print(f"发送角度时出错: {e}")
-        
-        # 修复脖子不动的问题
-        move_neck(angles[16], self.period_ms)
     
     def run_frame(self, state: WalkerState, frame: int = 0):
         """
