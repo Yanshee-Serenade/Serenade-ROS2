@@ -4,7 +4,17 @@ import math
 from typing import List, Dict, Tuple, Optional
 from enum import Enum
 from ros_api import JointAngleTCPClient
+import threading
 import YanAPI
+
+def _move_neck(angle, runtime):
+    """线程函数：控制脖子舵机转动"""
+    result = YanAPI.set_servos_angles({"NeckLR": angle}, runtime)
+    print(result)
+
+def move_neck(angle, runtime):
+    threading.Thread(target=_move_neck, args=(round(angle), round(runtime / 2))).start()
+
 
 class MockClient:
     def set_joint_angles(self, angles, time_ms=200):
@@ -276,12 +286,14 @@ class RobotWalker:
     def _apply_angles(self, angles):
         """发送到机器人客户端"""
         try:
-            # success, msg = self.client.set_joint_angles(angles, time_ms=self.period_ms)
-            angles_dict = YanAPI.convert_angles_to_dict(angles)
-            result = YanAPI.set_servos_angles(angles_dict, self.period_ms)
-            print(result)
+            success, msg = self.client.set_joint_angles(angles, time_ms=self.period_ms)
+            if not success:
+                print(f"发送角度失败: {msg}")
         except Exception as e:
             print(f"发送角度时出错: {e}")
+        
+        # 修复脖子不动的问题
+        move_neck(angles[16], self.period_ms)
     
     def run_frame(self, state: WalkerState, frame: int = 0):
         """
