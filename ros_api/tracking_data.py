@@ -9,7 +9,8 @@ import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from ros_api import (
+from ros_api.logger import setup_client_logger
+from ros_api.model import (
     CameraIntrinsics,
     CameraPose,
     ImageInfo,
@@ -17,7 +18,6 @@ from ros_api import (
     PointCloudInfo,
     Position,
     TrackingResult,
-    setup_client_logger,
 )
 
 

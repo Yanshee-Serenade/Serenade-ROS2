@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from dataclasses import dataclass, field
-from typing import Dict, List, NamedTuple, Optional, Tuple
+from typing import Dict, NamedTuple, Optional, Tuple
 
 import numpy as np
 
@@ -38,8 +38,10 @@ class CameraPoseData:
     topic: str
     ts: float
     frame: str
-    p: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
-    q: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0, 1.0])
+    position: Position = field(default_factory=lambda: Position(0.0, 0.0, 0.0))
+    orientation: Orientation = field(
+        default_factory=lambda: Orientation(1.0, 0.0, 0.0, 0.0)
+    )
 
     @classmethod
     def from_dict(cls, data: Dict) -> "CameraPoseData":
@@ -48,8 +50,8 @@ class CameraPoseData:
             topic=data.get("topic", ""),
             ts=data.get("ts", 0.0),
             frame=data.get("frame", ""),
-            p=data.get("p", [0.0, 0.0, 0.0]),
-            q=data.get("q", [0.0, 0.0, 0.0, 1.0]),
+            position=Position(*data.get("p", [0.0, 0.0, 0.0])),
+            orientation=Orientation(*data.get("q", [0.0, 0.0, 0.0, 1.0])),
         )
 
     def to_dict(self) -> Dict:
@@ -58,8 +60,8 @@ class CameraPoseData:
             "topic": self.topic,
             "ts": self.ts,
             "frame": self.frame,
-            "p": self.p,
-            "q": self.q,
+            "p": list(self.position),
+            "q": list(self.orientation),
         }
 
 

@@ -31,8 +31,8 @@ def calibrate_scale():
 
             # Only process RAW topic for scale calibration
             if topic == "raw":
-                # data.p is [x, y, z]
-                y_values.append(data.p[1])
+                # data.position is Position(x, y, z)
+                y_values.append(data.position.y)
 
         if not y_values:
             print(f"[Calibration] Warning: No data received for {label}")

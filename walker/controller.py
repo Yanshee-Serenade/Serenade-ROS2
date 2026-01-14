@@ -6,11 +6,19 @@ state transitions, and robot motion control.
 """
 
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
 from ros_api import CameraPoseClient, CameraPoseData
 
-from .gait import GaitStep, WalkerState
+from .gait import (
+    DefaultSequence,
+    GaitStep,
+    SquatSequence,
+    TurnLeftSequence,
+    TurnRightSequence,
+    WalkerState,
+    WalkSequence,
+)
 from .kinematics import KinematicsSolver
 
 
@@ -45,10 +53,7 @@ class RobotWalker:
         self.current_state = WalkerState.TURN_RIGHT
         self.previous_state = None
         self.current_phase = 0
-
-        # Initialize gait sequences
-        self.gait_sequences = self._initialize_gait_sequences()
-        self.current_sequence = self.gait_sequences[self.current_state]
+        self.current_sequence = DefaultSequence(self)
 
         # Timing related
         self.last_action_time = time.time() * 1000  # Convert to milliseconds
@@ -59,91 +64,20 @@ class RobotWalker:
         if self.camera_pose_client:
             self.camera_pose_client.start_streaming()
 
-    def _initialize_gait_sequences(self) -> Dict[WalkerState, List[GaitStep]]:
-        """Initialize all gait sequences."""
-        sequences = {}
-
-        # Turn left sequence
-        sequences[WalkerState.TURN_LEFT] = [
-            GaitStep(
-                self.solver, self.grid_size, (-0.02, 0.061, 0.0), (0.02, 0.06, 0.0)
-            ),
-            GaitStep(
-                self.solver, self.grid_size, (-0.04, 0.061, -0.02), (0.04, 0.06, 0.02)
-            ),
-        ]
-
-        # Turn right sequence
-        sequences[WalkerState.TURN_RIGHT] = [
-            GaitStep(
-                self.solver, self.grid_size, (-0.02, 0.06, 0.0), (0.02, 0.064, 0.0)
-            ),
-            GaitStep(
-                self.solver, self.grid_size, (-0.04, 0.06, 0.02), (0.04, 0.064, -0.02)
-            ),
-        ]
-
-        # Walk sequence
-        sequences[WalkerState.WALK] = [
-            GaitStep(
-                self.solver, self.grid_size, (-0.02, 0.065, 0.03), (0.02, 0.06, -0.01)
-            )
-            .set_left_lean(15)
-            .set_right_lean(15)
-            .set_neck(5)
-            .set_right_ankle_lean(-3)
-            .set_left_arm(-45)
-            .set_right_arm(45),
-            GaitStep(
-                self.solver, self.grid_size, (-0.02, 0.06, 0.03), (0.02, 0.065, -0.01)
-            )
-            .set_left_lean(15)
-            .set_right_lean(15)
-            .set_neck(5)
-            .set_left_ankle_lean(-3)
-            .set_left_arm(-45)
-            .set_right_arm(45),
-            GaitStep(
-                self.solver, self.grid_size, (-0.02, 0.06, -0.01), (0.02, 0.065, 0.03)
-            )
-            .set_left_lean(15)
-            .set_right_lean(15)
-            .set_neck(-5)
-            .set_left_ankle_lean(-3)
-            .set_left_arm(45)
-            .set_right_arm(-45),
-            GaitStep(
-                self.solver, self.grid_size, (-0.02, 0.065, -0.01), (0.02, 0.06, 0.03)
-            )
-            .set_left_lean(15)
-            .set_right_lean(15)
-            .set_neck(-5)
-            .set_right_ankle_lean(-3)
-            .set_left_arm(45)
-            .set_right_arm(-45),
-        ]
-
-        # Squat sequence
-        sequences[WalkerState.SQUAT] = [
-            GaitStep(
-                self.solver, self.grid_size, (-0.02, 0.09, 0.0), (0.02, 0.09, 0.0)
-            ),
-        ]
-
-        # Default sequence
-        sequences[WalkerState.DEFAULT] = [
-            GaitStep(
-                self.solver, self.grid_size, (-0.02, 0.04, 0.0), (0.02, 0.04, 0.0)
-            ),
-        ]
-
-        return sequences
-
     def set_state(self, state: WalkerState):
         """Set the walker state."""
         if state != self.current_state:
             self.current_state = state
-            self.current_sequence = self.gait_sequences[state]
+            if state == WalkerState.TURN_LEFT:
+                self.current_sequence = TurnLeftSequence(self)
+            elif state == WalkerState.TURN_RIGHT:
+                self.current_sequence = TurnRightSequence(self)
+            elif state == WalkerState.WALK:
+                self.current_sequence = WalkSequence(self)
+            elif state == WalkerState.SQUAT:
+                self.current_sequence = SquatSequence(self)
+            elif state == WalkerState.DEFAULT:
+                self.current_sequence = DefaultSequence(self)
             self.current_phase = 0
             print(f"切换状态到: {state.value}")
 
@@ -160,15 +94,95 @@ class RobotWalker:
         # Check if it's time for the next phase
         if current_time - self.last_action_time >= self.period_ms:
             self._apply_current_phase()
-            self.current_phase = (self.current_phase + 1) % len(self.current_sequence)
+            self.current_phase = (self.current_phase + 1) % len(
+                self.current_sequence.steps
+            )
             self.last_action_time = current_time
 
     def _apply_current_phase(self):
         """Apply current phase to the robot."""
-        if self.current_phase < len(self.current_sequence):
-            step = self.current_sequence[self.current_phase]
-            angles = step.angles
+        if self.current_phase < len(self.current_sequence.steps):
+            step = self.current_sequence.get_step(self.current_phase)
+
+            # Calculate joint angles from step data
+            angles = self._calculate_angles(step)
             self._apply_angles(angles)
+
+    def _calculate_angles(self, step: GaitStep) -> List[float]:
+        """
+        Calculate joint angles from gait step data.
+
+        Args:
+            step: GaitStep instance with target positions and modifiers
+
+        Returns:
+            List of joint angles
+        """
+        joint_angles = [0.0] * 17
+
+        # Coordinate conversion: swap y and z for IK solver
+        left_pos_converted = (
+            step.left_pos[0],
+            step.left_pos[2],
+            step.left_pos[1],
+        )  # (x, z, y)
+
+        right_pos_converted = (
+            step.right_pos[0],
+            step.right_pos[2],
+            step.right_pos[1],
+        )  # (x, z, y)
+
+        # Solve left leg inverse kinematics
+        left_result = self.solver.solve_leg_ik(
+            False, left_pos_converted, self.grid_size
+        )
+        if left_result:
+            left_angles, _ = left_result
+            for i in range(5):
+                joint_angles[11 + i] = left_angles[i]  # Left leg indices 11-15
+
+        # Solve right leg inverse kinematics
+        right_result = self.solver.solve_leg_ik(
+            True, right_pos_converted, self.grid_size
+        )
+        if right_result:
+            right_angles, _ = right_result
+            for i in range(5):
+                joint_angles[6 + i] = right_angles[i]  # Right leg indices 6-10
+
+        # Set default arm angles
+        joint_angles[0] = 90.0  # Right shoulder yaw
+        joint_angles[1] = 165.0  # Right shoulder pitch
+        joint_angles[2] = 100.0  # Right elbow
+        joint_angles[3] = 90.0  # Left shoulder yaw
+        joint_angles[4] = 15.0  # Left shoulder pitch
+        joint_angles[5] = 80.0  # Left elbow
+
+        # Set default neck angle
+        joint_angles[16] = 90.0
+
+        # Apply modifiers
+        if "right_arm" in step.modifiers:
+            joint_angles[0] -= step.modifiers["right_arm"]  # Right shoulder yaw
+        if "left_arm" in step.modifiers:
+            joint_angles[3] += step.modifiers["left_arm"]  # Left shoulder yaw
+        if "right_lean" in step.modifiers:
+            joint_angles[7] -= step.modifiers[
+                "right_lean"
+            ]  # Right leg hip lateral swing
+        if "left_lean" in step.modifiers:
+            joint_angles[12] += step.modifiers[
+                "left_lean"
+            ]  # Left leg hip lateral swing
+        if "right_ankle_lean" in step.modifiers:
+            joint_angles[9] += step.modifiers["right_ankle_lean"]
+        if "left_ankle_lean" in step.modifiers:
+            joint_angles[14] -= step.modifiers["left_ankle_lean"]
+        if "neck" in step.modifiers:
+            joint_angles[16] += step.modifiers["neck"]
+
+        return joint_angles
 
     def _apply_angles(self, angles):
         """Send angles to robot client."""
@@ -187,8 +201,11 @@ class RobotWalker:
             state: Gait type
             frame: Target frame number
         """
-        step = self.gait_sequences[state][frame]
-        angles = step.angles
+        self.set_state(state)
+        step = self.current_sequence.get_step(frame)
+
+        # Calculate and apply angles from step
+        angles = self._calculate_angles(step)
         self._apply_angles(angles)
 
     def run_sequence(self, state: WalkerState, cycles: int = 4):
@@ -199,27 +216,20 @@ class RobotWalker:
             state: Gait type
             cycles: Number of cycles to run
         """
-        self.set_state(state)
         self.reset()
-        time.sleep(self.period_ms / 1000.0)
+        self.set_state(state)
+        time.sleep(1)
 
-        total_phases = len(self.current_sequence) * cycles
+        total_phases = len(self.current_sequence.steps) * cycles
         print(
             f"开始运行 {state.value} 步态，共 {cycles} 个周期 ({total_phases} 个相位)"
         )
 
         for i in range(total_phases):
             self._apply_current_phase()
-            self.current_phase = (self.current_phase + 1) % len(self.current_sequence)
-
-            # Print current position information
-            (pose, timestamp) = self.get_latest_camera_pose()
-            print(f"当前时间：{self.get_current_timestamp()}")
-            print(f"相机时间：{timestamp}")
-            if pose:
-                print(f"相机位置：{pose.p}")
-            else:
-                print("相机位置：None")
+            self.current_phase = (self.current_phase + 1) % len(
+                self.current_sequence.steps
+            )
 
             # Wait for period_ms
             time.sleep(self.period_ms / 1000.0)
@@ -235,7 +245,7 @@ class RobotWalker:
         """
         return time.time() - self.start_time
 
-    def get_latest_camera_pose(self) -> Tuple[Optional[CameraPoseData], float]:
+    def get_camera_pose(self) -> Optional[CameraPoseData]:
         """
         Get the latest camera pose and timestamp since start.
 
@@ -245,10 +255,9 @@ class RobotWalker:
                 - timestamp_seconds: Time in seconds since the camera pose client started
         """
         if not self.camera_pose_client:
-            return None, 0.0
+            return None
 
-        (pose, timestamp) = self.camera_pose_client.get_latest_pose()
-        return pose, timestamp - self.start_time
+        return self.camera_pose_client.get_latest_pose()
 
     def set_scale(self, scale: float):
         """
