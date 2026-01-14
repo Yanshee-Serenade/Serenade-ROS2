@@ -124,3 +124,12 @@ class CameraPoseClient:
                 pass
             self.sock.close()
             self.sock = None
+
+    def set_scale(self, scale: float):
+        """
+        Set the scale factor for the camera pose data.
+
+        Args:
+            scale: Scale factor to set
+        """
+        self._scale = scale

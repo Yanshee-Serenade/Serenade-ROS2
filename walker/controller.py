@@ -249,3 +249,13 @@ class RobotWalker:
 
         (pose, timestamp) = self.camera_pose_client.get_latest_pose()
         return pose, timestamp - self.start_time
+
+    def set_scale(self, scale: float):
+        """
+        Set the scale factor for the controller.
+
+        Args:
+            scale: Scale factor to set
+        """
+        if self.camera_pose_client:
+            self.camera_pose_client.set_scale(scale)
