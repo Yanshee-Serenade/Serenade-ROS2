@@ -6,7 +6,9 @@ state transitions, and robot motion control.
 """
 
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
+
+from ros_api import CameraPoseClient, CameraPoseData
 
 from .gait import GaitStep, WalkerState
 from .kinematics import KinematicsSolver
@@ -21,6 +23,7 @@ class RobotWalker:
         client,
         grid_size: int = 12,
         period_ms: int = 200,
+        camera_pose_client: Optional[CameraPoseClient] = None,
     ):
         """
         Initialize robot walker controller.
@@ -30,11 +33,13 @@ class RobotWalker:
             client: Robot client (e.g., JointAngleTCPClient)
             grid_size: Grid search density for IK
             period_ms: Action period in milliseconds
+            camera_pose_client: Optional CameraPoseClient for accessing camera pose data
         """
         self.solver = solver
         self.client = client
         self.grid_size = grid_size
         self.period_ms = period_ms
+        self.camera_pose_client = camera_pose_client
 
         # State control
         self.current_state = WalkerState.TURN_RIGHT
@@ -47,7 +52,12 @@ class RobotWalker:
 
         # Timing related
         self.last_action_time = time.time() * 1000  # Convert to milliseconds
+        self.start_time = time.time()
         self.running = False
+
+        # Start camera pose streaming if client is available
+        if self.camera_pose_client:
+            self.camera_pose_client.start_streaming()
 
     def _initialize_gait_sequences(self) -> Dict[WalkerState, List[GaitStep]]:
         """Initialize all gait sequences."""
@@ -202,7 +212,40 @@ class RobotWalker:
             self._apply_current_phase()
             self.current_phase = (self.current_phase + 1) % len(self.current_sequence)
 
+            # Print current position information
+            (pose, timestamp) = self.get_latest_camera_pose()
+            print(f"当前时间：{self.get_current_timestamp()}")
+            print(f"相机时间：{timestamp}")
+            if pose:
+                print(f"相机位置：{pose.p}")
+            else:
+                print("相机位置：None")
+
             # Wait for period_ms
             time.sleep(self.period_ms / 1000.0)
 
         print(f"{state.value} 步态完成")
+
+    def get_current_timestamp(self) -> float:
+        """
+        Get the current timestamp since start.
+
+        Returns:
+            float: Time in seconds since the controller started
+        """
+        return time.time() - self.start_time
+
+    def get_latest_camera_pose(self) -> Tuple[Optional[CameraPoseData], float]:
+        """
+        Get the latest camera pose and timestamp since start.
+
+        Returns:
+            tuple: (pose_data, timestamp_seconds) where:
+                - pose_data: CameraPoseData object or None if not available
+                - timestamp_seconds: Time in seconds since the camera pose client started
+        """
+        if not self.camera_pose_client:
+            return None, 0.0
+
+        (pose, timestamp) = self.camera_pose_client.get_latest_pose()
+        return pose, timestamp - self.start_time

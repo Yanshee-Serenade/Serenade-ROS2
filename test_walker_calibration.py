@@ -1,48 +1,50 @@
 import time
+
 from ros_api import CameraPoseClient
-from walker import create_walker, WalkerState
+from walker import WalkerState, create_walker
+
 
 def calibrate_scale():
     """
-    Calibrates the scale of the ORB_SLAM3 system by comparing a known 
+    Calibrates the scale of the ORB_SLAM3 system by comparing a known
     physical movement (squat 0.05m) against the raw SLAM coordinate change.
     """
-    
+
     # 1. Initialize Client
     walker = create_walker(1000)
-    client = CameraPoseClient(host='localhost', port=51118)
-    
+    client = CameraPoseClient(host="localhost", port=51118)
+
     # We get the generator once so we keep the same TCP connection open
     stream_iterator = client.stream()
-    
+
     print("[Calibration] Connecting to SLAM stream...")
 
     def collect_average_y(duration_sec, label):
         """Helper to consume stream for X seconds and average the Y value."""
         y_values = []
         start_time = time.time()
-        
+
         for topic, data in stream_iterator:
             # Check duration
             if time.time() - start_time > duration_sec:
                 break
-            
+
             # Only process RAW topic for scale calibration
-            if topic == 'raw':
-                # data['p'] is [x, y, z]
-                y_values.append(data['p'][1])
-        
+            if topic == "raw":
+                # data.p is [x, y, z]
+                y_values.append(data.p[1])
+
         if not y_values:
             print(f"[Calibration] Warning: No data received for {label}")
             return 0.0
-            
+
         avg_y = sum(y_values) / len(y_values)
         print(f"[Calibration] {label}: {avg_y:.7f} (samples: {len(y_values)})")
         return avg_y
 
     def drain_stream(duration_sec):
         """
-        Consumes and discards data. 
+        Consumes and discards data.
         Crucial so that after sleeping, we aren't reading old buffered packets.
         """
         start_time = time.time()
@@ -77,7 +79,9 @@ def calibrate_scale():
         real_delta = 0.05  # 5 cm known physical drop
 
         if raw_delta < 1e-5:
-            print("[Calibration] Error: Raw SLAM y-delta is practically zero. Cannot calibrate.")
+            print(
+                "[Calibration] Error: Raw SLAM y-delta is practically zero. Cannot calibrate."
+            )
             scale_factor = 1.0
         else:
             scale_factor = real_delta / raw_delta
@@ -95,8 +99,10 @@ def calibrate_scale():
     except Exception as e:
         print(f"[Calibration] Error: {e}")
         return 1
+
     finally:
         client.close()
+
 
 if __name__ == "__main__":
     calibrate_scale()

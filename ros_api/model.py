@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+from dataclasses import dataclass, field
+from typing import Dict, List, NamedTuple, Optional, Tuple
+
+import numpy as np
+
+
+class CameraIntrinsics(NamedTuple):
+    """相机内参数据结构（带类型标注）"""
+
+    fx: float
+    fy: float
+    cx: float
+    cy: float
+
+
+class Position(NamedTuple):
+    """位置数据结构（带类型标注）"""
+
+    x: float
+    y: float
+    z: float
+
+
+class Orientation(NamedTuple):
+    """姿态四元数数据结构（带类型标注）"""
+
+    w: float
+    x: float
+    y: float
+    z: float
+
+
+@dataclass
+class CameraPoseData:
+    """Camera pose data structure"""
+
+    topic: str
+    ts: float
+    frame: str
+    p: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    q: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0, 1.0])
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "CameraPoseData":
+        """Create CameraPoseData from dictionary"""
+        return cls(
+            topic=data.get("topic", ""),
+            ts=data.get("ts", 0.0),
+            frame=data.get("frame", ""),
+            p=data.get("p", [0.0, 0.0, 0.0]),
+            q=data.get("q", [0.0, 0.0, 0.0, 1.0]),
+        )
+
+    def to_dict(self) -> Dict:
+        """Convert CameraPoseData to dictionary"""
+        return {
+            "topic": self.topic,
+            "ts": self.ts,
+            "frame": self.frame,
+            "p": self.p,
+            "q": self.q,
+        }
+
+
+class CameraPose(NamedTuple):
+    """相机位姿数据结构（带类型标注）"""
+
+    position: Position
+    orientation: Orientation
+
+
+class PointCloudInfo(NamedTuple):
+    """点云信息数据结构（带类型标注）"""
+
+    total_bytes: int
+    point_count: int
+
+
+class ImageInfo(NamedTuple):
+    """图像信息数据结构（带类型标注）"""
+
+    total_bytes: int
+    shape: Optional[Tuple[int, ...]]
+
+
+class TrackingResult(NamedTuple):
+    """跟踪数据最终结果（带完整类型标注，作为闭环方法返回值）"""
+
+    intrinsics: CameraIntrinsics
+    success: bool
+    camera_pose: CameraPose
+    point_cloud_camera_info: PointCloudInfo
+    tracked_points_camera: np.ndarray
+    point_cloud_world_info: PointCloudInfo
+    tracked_points_world: np.ndarray
+    image_info: ImageInfo
+    current_image: Optional[np.ndarray]
+    total_recv_size: int
+    parse_cost_ms: float

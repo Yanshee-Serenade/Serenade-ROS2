@@ -5,7 +5,9 @@ This module provides the create_walker function which simplifies
 the creation of RobotWalker instances with proper initialization.
 """
 
-from ros_api import JointAngleTCPClient
+from typing import Optional
+
+from ros_api import CameraPoseClient, JointAngleTCPClient
 
 from .controller import RobotWalker
 from .kinematics import KinematicsSolver
@@ -18,6 +20,9 @@ def create_walker(
     port: int = 51120,
     timeout: int = 10,
     use_mock: bool = False,
+    camera_pose_host: str = "localhost",
+    camera_pose_port: int = 51118,
+    use_camera_pose: bool = True,
 ) -> RobotWalker:
     """
     Create and initialize a RobotWalker instance.
@@ -62,63 +67,34 @@ def create_walker(
         angle_client = JointAngleTCPClient(host=host, port=port, timeout=timeout)
         print(f"   ✓ Robot client connected to {host}:{port}")
 
-    # 3. Create Walker
-    print("\n3. Creating walker controller...")
+    # 3. Initialize camera pose client if requested
+    camera_pose_client: Optional[CameraPoseClient] = None
+    if use_camera_pose:
+        print("\n3. Initializing camera pose client...")
+        try:
+            camera_pose_client = CameraPoseClient(
+                host=camera_pose_host, port=camera_pose_port
+            )
+            if camera_pose_client.connect():
+                print(
+                    f"   ✓ Camera pose client connected to {camera_pose_host}:{camera_pose_port}"
+                )
+            else:
+                print("   ⚠ Camera pose client connection failed")
+                camera_pose_client = None
+        except Exception as e:
+            print(f"   ⚠ Failed to initialize camera pose client: {e}")
+            camera_pose_client = None
+
+    # 4. Create Walker
+    print("\n4. Creating walker controller...")
     try:
         walker = RobotWalker(
             solver=solver,
             client=angle_client,
             grid_size=12,
             period_ms=period_ms,
-        )
-        print(f"   ✓ Walker created successfully, period: {walker.period_ms}ms")
-    except Exception as e:
-        raise RuntimeError(f"Failed to create walker: {e}")
-
-    return walker
-
-
-def create_walker_with_custom_client(
-    period_ms: int = 200,
-    lib_path: str = "./libyanshee_kinematics.so",
-    custom_client=None,
-) -> RobotWalker:
-    """
-    Create a RobotWalker instance with a custom client.
-
-    This variant allows using a pre-configured or custom robot client.
-
-    Args:
-        period_ms: Action period in milliseconds
-        lib_path: Path to the native kinematics library
-        custom_client: Pre-configured robot client instance
-
-    Returns:
-        Initialized RobotWalker instance
-    """
-    # 1. Initialize inverse kinematics solver
-    print("1. Initializing inverse kinematics solver...")
-    try:
-        solver = KinematicsSolver(lib_path)
-        print("   ✓ Inverse kinematics solver initialized successfully")
-    except Exception as e:
-        raise RuntimeError(f"Failed to initialize kinematics solver: {e}")
-
-    # 2. Use provided custom client
-    print("\n2. Using custom robot client...")
-    if custom_client is None:
-        raise ValueError("custom_client must be provided")
-
-    print("   ✓ Custom client configured")
-
-    # 3. Create Walker
-    print("\n3. Creating walker controller...")
-    try:
-        walker = RobotWalker(
-            solver=solver,
-            client=custom_client,
-            grid_size=12,
-            period_ms=period_ms,
+            camera_pose_client=camera_pose_client,
         )
         print(f"   ✓ Walker created successfully, period: {walker.period_ms}ms")
     except Exception as e:
