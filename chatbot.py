@@ -12,7 +12,7 @@ import YanAPI
 # 初始化机器人连接
 YanAPI.yan_api_init("raspberrypi")
 
-# 不启用分段 TTS，因为 TTS 分段延迟太大。在 8bit 量化的情况下，鸡煲输出的短一些延迟就会很低
+# 不启用分段 TTS，因为 TTS 分段延迟太大。在模型 8bit 量化的情况下，鸡煲输出的短一些延迟就会很低
 SEGMENT_TTS = False
 
 

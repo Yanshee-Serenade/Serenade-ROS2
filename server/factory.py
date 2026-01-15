@@ -6,9 +6,8 @@ the creation and initialization of the complete server system.
 """
 
 import datetime
-from typing import Optional
 
-from .config import Config, config
+from .config import config
 from .models.model_loader import ModelManager
 
 
@@ -99,23 +98,3 @@ def create_server(
     )
 
     return model_manager
-
-
-def create_server_with_config(custom_config: Optional[Config] = None) -> ModelManager:
-    """
-    Create server with custom configuration.
-
-    Args:
-        custom_config: Custom configuration instance. If None, uses default config.
-
-    Returns:
-        Fully initialized ModelManager instance
-    """
-    if custom_config is None:
-        custom_config = config
-
-    return create_server(
-        vlm_model=custom_config.MODEL_VLM_DEFAULT,
-        da3_model=custom_config.MODEL_DA3_DEFAULT,
-        sam3_model_path=custom_config.MODEL_SAM3_PATH,
-    )

@@ -58,7 +58,7 @@ def create_flask_app(model_manager: Optional[ModelManager] = None) -> Flask:
         """
         Main generation endpoint.
 
-        Processes image from ROS, generates depth map, and streams text response.
+        Processes image from ROS and streams text response.
         """
         # 1. Parse request parameters
         data = request.json or {}
@@ -86,31 +86,7 @@ def create_flask_app(model_manager: Optional[ModelManager] = None) -> Flask:
                 if not pil_image:
                     raise Exception(image_path)  # image_path contains error message
 
-                # 4. Get original image dimensions for depth map matching
-                if cv_image is None:
-                    raise Exception("cv_image is None")
-                image_shape = extract_image_shape(cv_image)
-                print(
-                    f"[{timestamp}] 📏 Original image size: {image_shape}, "
-                    f"preparing to generate corresponding depth map..."
-                )
-
-                # 5. Generate DA3 depth map (matching original image size)
-                print(f"[{timestamp}] 📊 Starting DA3 depth map generation...")
-                da3_depth_map = generate_depth_map(
-                    image_path, image_shape, model_manager
-                )
-
-                # 6. Create and save depth comparison visualizations
-                if camera_point_cloud is not None:
-                    plot_depth_comparison(
-                        camera_point_cloud, da3_depth_map, timestamp, image_shape
-                    )
-                    save_da3_depth_with_ros_keypoints(
-                        da3_depth_map, camera_point_cloud, timestamp, image_shape
-                    )
-
-                # 7. Stream text generation response
+                # 4. Stream text generation response
                 return Response(
                     generate_text_stream(
                         text_query, image_path, timestamp, model_manager
@@ -243,7 +219,7 @@ def run_server(
         f"Flask server starting at: http://{host}:{port}"
     )
     print(f"[{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}] 📍 Endpoints:")
-    print("  • POST /generate    - Full pipeline (image + depth + text)")
+    print("  • POST /generate    - Text-generation pipeline")
     print("  • POST /depth       - Depth-only pipeline")
     print("  • GET  /health      - Health check")
     print("  • GET  /models      - List available models")
