@@ -1,7 +1,7 @@
 import time
 
 from ros_api import CameraPoseClient
-from walker import WalkerState, create_walker
+from walker import SquatSequence, create_walker
 
 
 def calibrate_scale():
@@ -54,7 +54,7 @@ def calibrate_scale():
 
     try:
         # --- Step 1: Measure Initial State ---
-        walker.run_frame(WalkerState.DEFAULT, 0)
+        walker.reset()
         print("[Calibration] Waiting 3s for stability...")
         drain_stream(3.0)
         print("[Calibration] Measuring baseline (3s)...")
@@ -62,7 +62,7 @@ def calibrate_scale():
 
         # --- Step 2: Trigger Squat ---
         print("[Calibration] Robot Squatting...")
-        walker.run_frame(WalkerState.SQUAT, 0)
+        walker.run_sequence(SquatSequence())
 
         # --- Step 3: Wait for Stability (Drain Buffer) ---
         # We drain the stream for 3 seconds instead of time.sleep(3).
@@ -93,7 +93,7 @@ def calibrate_scale():
 
         # --- Step 6: Revert ---
         print("[Calibration] Reverting to Default...")
-        walker.run_frame(WalkerState.DEFAULT, 0)
+        walker.reset()
         return scale_factor
 
     except Exception as e:

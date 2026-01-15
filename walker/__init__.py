@@ -14,7 +14,6 @@ from .gait import (
     SquatSequence,
     TurnLeftSequence,
     TurnRightSequence,
-    WalkerState,
     WalkSequence,
 )
 from .kinematics import KinematicsSolver
@@ -22,7 +21,6 @@ from .mock_client import MockClient
 
 __all__ = [
     "KinematicsSolver",
-    "WalkerState",
     "GaitStep",
     "BaseSequence",
     "TurnLeftSequence",

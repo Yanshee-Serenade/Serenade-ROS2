@@ -7,24 +7,13 @@ and base classes for gait sequences.
 """
 
 from abc import ABC, abstractmethod
-from enum import Enum
-from typing import TYPE_CHECKING, Dict, List, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 if TYPE_CHECKING:
     from .controller import RobotWalker
-
-
-class WalkerState(Enum):
-    """Enumeration of different walker states."""
-
-    TURN_LEFT = "turn_left"
-    TURN_RIGHT = "turn_right"
-    WALK = "walk"
-    SQUAT = "squat"
-    DEFAULT = "default"
 
 
 class GaitStep:
@@ -63,7 +52,7 @@ class GaitStep:
         return self
 
     def set_left_lean(self, angle: float) -> "GaitStep":
-        """Set left side forward lean angle."""
+        """Set left side forward lift angle."""
         self.modifiers["left_lean"] = angle
         return self
 
@@ -124,7 +113,7 @@ class GaitStep:
 class BaseSequence(ABC):
     """Base class for all gait sequences."""
 
-    def __init__(self, walker: "RobotWalker"):
+    def attach_walker(self, walker: "RobotWalker"):
         """
         Initialize sequence with walker reference.
 
@@ -141,22 +130,60 @@ class BaseSequence(ABC):
         """Initialize the sequence steps. Must be implemented by subclasses."""
         pass
 
-    def get_step(self, phase: int) -> GaitStep:
+    @abstractmethod
+    def get_step(self, step_index: int) -> Optional[GaitStep]:
         """
-        Get gait step for the given phase.
+        Get gait step for the given step index.
 
         Args:
-            phase: Current phase index
+            step_index: Current step index (0-based)
 
         Returns:
-            GaitStep instance for the phase
+            GaitStep instance for the step, or None if sequence should stop
         """
-        if phase < len(self.steps):
-            return self.steps[phase]
-        return self.steps[0]
+        pass
 
 
-class TurnLeftSequence(BaseSequence):
+class CyclingSequence(BaseSequence):
+    """Base class for cycling sequences that never return None."""
+
+    def get_step(self, step_index: int) -> Optional[GaitStep]:
+        """
+        Get gait step for the given step index, cycling through steps.
+
+        Args:
+            step_index: Current step index (0-based)
+
+        Returns:
+            GaitStep instance for the step (never returns None)
+        """
+        if not self.steps:
+            return None
+
+        # Cycle through steps using modulo
+        phase = step_index % len(self.steps)
+        return self.steps[phase]
+
+
+class OneShotSequence(BaseSequence):
+    """Base class for one-shot sequences that return None after completion."""
+
+    def get_step(self, step_index: int) -> Optional[GaitStep]:
+        """
+        Get gait step for the given step index, returns None after last step.
+
+        Args:
+            step_index: Current step index (0-based)
+
+        Returns:
+            GaitStep instance for the step, or None if step_index >= len(steps)
+        """
+        if step_index < len(self.steps):
+            return self.steps[step_index]
+        return None
+
+
+class TurnLeftSequence(CyclingSequence):
     """Turn left gait sequence."""
 
     def _initialize_steps(self):
@@ -166,17 +193,20 @@ class TurnLeftSequence(BaseSequence):
             GaitStep((-0.04, 0.06, -0.02), (0.04, 0.06, 0.02)),
         ]
 
-    def get_step(self, phase: int) -> GaitStep:
+    def get_step(self, step_index: int) -> Optional[GaitStep]:
         """
-        Get gait step for the given phase with Y-axis offset for turn left.
+        Get gait step for the given step index with Y-axis offset for turn left.
 
         Args:
-            phase: Current phase index
+            step_index: Current step index (0-based)
 
         Returns:
-            GaitStep instance for the phase with offset applied
+            GaitStep instance for the step with offset applied
         """
-        step = super().get_step(phase)
+        step = super().get_step(step_index)
+        if step is None:
+            return None
+
         # Add Y-axis offset to left foot for turn left
         left_pos = (
             step.left_pos[0] + 0.0,
@@ -188,7 +218,7 @@ class TurnLeftSequence(BaseSequence):
         return new_step
 
 
-class TurnRightSequence(BaseSequence):
+class TurnRightSequence(CyclingSequence):
     """Turn right gait sequence."""
 
     def _initialize_steps(self):
@@ -198,17 +228,20 @@ class TurnRightSequence(BaseSequence):
             GaitStep((-0.04, 0.06, 0.02), (0.04, 0.06, -0.02)),
         ]
 
-    def get_step(self, phase: int) -> GaitStep:
+    def get_step(self, step_index: int) -> Optional[GaitStep]:
         """
-        Get gait step for the given phase with Y-axis offset for turn right.
+        Get gait step for the given step index with Y-axis offset for turn right.
 
         Args:
-            phase: Current phase index
+            step_index: Current step index (0-based)
 
         Returns:
-            GaitStep instance for the phase with offset applied
+            GaitStep instance for the step with offset applied
         """
-        step = super().get_step(phase)
+        step = super().get_step(step_index)
+        if step is None:
+            return None
+
         # Add Y-axis offset to right foot for turn right
         right_pos = (
             step.right_pos[0] + 0.0,
@@ -220,8 +253,12 @@ class TurnRightSequence(BaseSequence):
         return new_step
 
 
-class WalkSequence(BaseSequence):
+class WalkSequence(CyclingSequence):
     """Walk gait sequence."""
+
+    def __init__(self, backward=False):
+        self.backward = backward
+        super().__init__()
 
     def _initialize_steps(self):
         """Initialize walk steps."""
@@ -256,17 +293,20 @@ class WalkSequence(BaseSequence):
             .set_right_arm(-45),
         ]
 
-    def get_step(self, phase: int) -> GaitStep:
+    def get_step(self, step_index: int) -> Optional[GaitStep]:
         """
-        Get gait step for the given phase with Y-axis offset for walking.
+        Get gait step for the given step index with Y-axis offset for walking.
 
         Args:
-            phase: Current phase index
+            step_index: Current step index (0-based)
 
         Returns:
-            GaitStep instance for the phase with offset applied
+            GaitStep instance for the step with offset applied
         """
-        step = super().get_step(phase)
+        step = super().get_step(step_index)
+        if step is None:
+            return None
+
         right_spin = 0.0
 
         # Parameters (Tune these!)
@@ -297,11 +337,7 @@ class WalkSequence(BaseSequence):
                     ]
                 )
 
-                # current_pose_data is (data, timestamp) tuple from controller.py check?
-                # looking at controller.py, get_camera_pose returns CameraPoseData directly?
-                # wait, controller.py says: return self.camera_pose_client.get_latest_pose()
-                # Let's assume it returns the object directly based on type hinting.
-
+                # current_pose_data is CameraPoseData
                 curr = current_pose_data
                 q_curr = [
                     curr.orientation.x,
@@ -331,6 +367,8 @@ class WalkSequence(BaseSequence):
                 # 5. Calculate Control Output (PD Controller - P term only here)
                 # If yaw is positive (turned left), we need right_spin positive.
                 # If lat is positive (drifted left), we need right_spin positive.
+                # If backward is True, we invert the sign of yaw_error.
+                yaw_error = -yaw_error if self.backward else yaw_error
                 right_spin = (K_yaw * yaw_error) + (K_lat * lat_error)
 
                 # Clip limits to prevent falling
@@ -339,7 +377,10 @@ class WalkSequence(BaseSequence):
                     f"Yaw Error: {yaw_error:.4f}, Lateral Error: {lat_error:.4f}, Right Spin: {right_spin:.4f}"
                 )
 
-        if phase == 0 or phase == 3:
+        # Calculate phase for offset logic (0-3 for walk sequence)
+        phase = step_index % 4
+
+        if self.backward ^ (phase == 0 or phase == 3):
             # Reducing the addition to `y` increases the friction between robot left foot
             # and ground, so that robot turns left
             left_pos = (
@@ -361,7 +402,7 @@ class WalkSequence(BaseSequence):
             return new_step
 
 
-class SquatSequence(BaseSequence):
+class SquatSequence(OneShotSequence):
     """Squat gait sequence."""
 
     def _initialize_steps(self):
@@ -371,7 +412,7 @@ class SquatSequence(BaseSequence):
         ]
 
 
-class DefaultSequence(BaseSequence):
+class DefaultSequence(OneShotSequence):
     """Default (standing) gait sequence."""
 
     def _initialize_steps(self):

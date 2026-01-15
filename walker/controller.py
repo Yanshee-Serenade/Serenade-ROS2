@@ -11,13 +11,9 @@ from typing import List, Optional
 from ros_api import CameraPoseClient, CameraPoseData
 
 from .gait import (
+    BaseSequence,
     DefaultSequence,
     GaitStep,
-    SquatSequence,
-    TurnLeftSequence,
-    TurnRightSequence,
-    WalkerState,
-    WalkSequence,
 )
 from .kinematics import KinematicsSolver
 
@@ -50,10 +46,8 @@ class RobotWalker:
         self.camera_pose_client = camera_pose_client
 
         # State control
-        self.current_state = WalkerState.TURN_RIGHT
-        self.previous_state = None
         self.current_phase = 0
-        self.current_sequence = DefaultSequence(self)
+        self.current_sequence = DefaultSequence()
 
         # Timing related
         self.last_action_time = time.time() * 1000  # Convert to milliseconds
@@ -64,49 +58,12 @@ class RobotWalker:
         if self.camera_pose_client:
             self.camera_pose_client.start_streaming()
 
-    def set_state(self, state: WalkerState):
-        """Set the walker state."""
-        if state != self.current_state:
-            self.current_state = state
-            if state == WalkerState.TURN_LEFT:
-                self.current_sequence = TurnLeftSequence(self)
-            elif state == WalkerState.TURN_RIGHT:
-                self.current_sequence = TurnRightSequence(self)
-            elif state == WalkerState.WALK:
-                self.current_sequence = WalkSequence(self)
-            elif state == WalkerState.SQUAT:
-                self.current_sequence = SquatSequence(self)
-            elif state == WalkerState.DEFAULT:
-                self.current_sequence = DefaultSequence(self)
-            self.current_phase = 0
-            print(f"切换状态到: {state.value}")
-
     def reset(self):
         """Reset to initial state."""
         self.current_phase = 0
         self.last_action_time = time.time() * 1000
-        self.run_frame(WalkerState.DEFAULT, 0)
-
-    def update(self):
-        """Update gait phase, should be called in a loop."""
-        current_time = time.time() * 1000  # milliseconds
-
-        # Check if it's time for the next phase
-        if current_time - self.last_action_time >= self.period_ms:
-            self._apply_current_phase()
-            self.current_phase = (self.current_phase + 1) % len(
-                self.current_sequence.steps
-            )
-            self.last_action_time = current_time
-
-    def _apply_current_phase(self):
-        """Apply current phase to the robot."""
-        if self.current_phase < len(self.current_sequence.steps):
-            step = self.current_sequence.get_step(self.current_phase)
-
-            # Calculate joint angles from step data
-            angles = self._calculate_angles(step)
-            self._apply_angles(angles)
+        # Run default sequence once to reset position
+        self.run_sequence(DefaultSequence())
 
     def _calculate_angles(self, step: GaitStep) -> List[float]:
         """
@@ -193,48 +150,37 @@ class RobotWalker:
         except Exception as e:
             print(f"发送角度时出错: {e}")
 
-    def run_frame(self, state: WalkerState, frame: int = 0):
+    def run_sequence(self, sequence: BaseSequence):
         """
-        Run a specific frame of a gait sequence.
+        Run a gait sequence to completion.
 
         Args:
-            state: Gait type
-            frame: Target frame number
+            sequence: BaseSequence instance to run
         """
-        self.set_state(state)
-        step = self.current_sequence.get_step(frame)
+        sequence.attach_walker(self)
+        self.current_sequence = sequence
+        self.current_phase = 0
 
-        # Calculate and apply angles from step
-        angles = self._calculate_angles(step)
-        self._apply_angles(angles)
+        print(f"开始运行序列: {sequence.__class__.__name__}")
 
-    def run_sequence(self, state: WalkerState, cycles: int = 4):
-        """
-        Run multiple cycles of a specific gait.
+        while True:
+            step = sequence.get_step(self.current_phase)
 
-        Args:
-            state: Gait type
-            cycles: Number of cycles to run
-        """
-        self.reset()
-        self.set_state(state)
-        time.sleep(1)
+            if step is None:
+                # Sequence completed (one-shot sequence)
+                break
 
-        total_phases = len(self.current_sequence.steps) * cycles
-        print(
-            f"开始运行 {state.value} 步态，共 {cycles} 个周期 ({total_phases} 个相位)"
-        )
+            # Calculate and apply angles from step
+            angles = self._calculate_angles(step)
+            self._apply_angles(angles)
 
-        for i in range(total_phases):
-            self._apply_current_phase()
-            self.current_phase = (self.current_phase + 1) % len(
-                self.current_sequence.steps
-            )
+            # Move to next phase
+            self.current_phase += 1
 
             # Wait for period_ms
             time.sleep(self.period_ms / 1000.0)
 
-        print(f"{state.value} 步态完成")
+        print(f"序列完成: {sequence.__class__.__name__}")
 
     def get_current_timestamp(self) -> float:
         """
