@@ -122,8 +122,8 @@ async def run_all_tests(base_url: str = "http://localhost:21122") -> Dict[str, b
 
         # Test 3: Text generation
         print("\n3. Testing /generate endpoint...")
-        # results["generate"] = await test_generate(session, base_url)
-        results["generate"] = True
+        results["generate"] = await test_generate(session, base_url)
+        # results["generate"] = True
 
         # Test 4: Depth generation
         print("\n4. Testing /depth endpoint...")

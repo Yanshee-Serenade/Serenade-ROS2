@@ -12,7 +12,7 @@ import torch
 from depth_anything_3.api import DepthAnything3
 from sam3.model.sam3_image_processor import Sam3Processor
 from sam3.model_builder import build_sam3_image_model
-from transformers import AutoModelForImageTextToText, AutoProcessor
+from transformers import AutoModelForImageTextToText, AutoProcessor, BitsAndBytesConfig
 
 from ..config import config
 
@@ -46,14 +46,17 @@ class ModelManager:
 
             # 2. Load model
             print(f"{time.time()} > Loading model weights...", flush=True)
-            self.model_vlm = AutoModelForImageTextToText.from_pretrained(
-                model_path, load_in_8bit=True
+            bnb_config = BitsAndBytesConfig(
+                load_in_8bit=True,
+                llm_int8_threshold=6.0,
+                llm_int8_has_fp16_weight=False,
             )
-
-            # 3. Compile model for optimization
-            print(f"{time.time()} > Compiling model...", flush=True)
-            if hasattr(torch, "compile"):
-                self.model_vlm = torch.compile(self.model_vlm)
+            self.model_vlm = AutoModelForImageTextToText.from_pretrained(
+                model_path,
+                quantization_config=bnb_config,
+                device_map="auto",
+            )
+            self.model_vlm.eval()
 
             print(f"{time.time()} > ✅ VLM model loaded and compiled!", flush=True)
         except Exception as e:
@@ -72,8 +75,13 @@ class ModelManager:
         try:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             self.model_da3 = DepthAnything3.from_pretrained(model_path)
-            self.model_da3 = self.model_da3.to(device)
+            self.model_da3 = self.model_da3.to(device=device, dtype=torch.float32)
             self.model_da3.eval()
+            if torch.cuda.is_available():
+                self.model_da3 = torch.compile(  # pyright: ignore[reportAttributeAccessIssue]
+                    self.model_da3,
+                    mode="reduce-overhead",
+                )
             print(f"{time.time()} > ✅ DA3 model loaded and compiled!", flush=True)
         except Exception as e:
             raise Exception(f"DA3 model loading failed: {str(e)}")
@@ -90,7 +98,9 @@ class ModelManager:
         """
         try:
             model = build_sam3_image_model(
-                load_from_HF=False, checkpoint_path=model_path
+                load_from_HF=False,
+                checkpoint_path=model_path,
+                compile=True,
             )
             self.processor_sam3 = Sam3Processor(model)
             print(f"{time.time()} > ✅ SAM3 model loaded and compiled!", flush=True)
@@ -101,8 +111,7 @@ class ModelManager:
         """Load all models with default configurations."""
         self.load_vlm()
         self.load_da3()
-        # SAM3 is optional, load if needed
-        # self.load_sam3()
+        self.load_sam3()
 
     def get_vlm(self) -> Any:
         """Get VLM model instance."""

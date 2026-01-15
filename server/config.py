@@ -8,6 +8,8 @@ including model paths, network settings, and generation parameters.
 import os
 from dataclasses import dataclass
 
+from ros_api import CameraIntrinsics, DistortionCoefficients
+
 
 @dataclass
 class Config:
@@ -21,6 +23,7 @@ class Config:
     MODEL_SMOLVLM: str = "HuggingFaceTB/SmolVLM2-2.2B-Instruct"
 
     # Depth Anything 3 Models
+    MODEL_DA3_BASE: str = "depth-anything/DA3-BASE"
     MODEL_DA3_LARGE: str = "depth-anything/DA3-LARGE-1.1"
     MODEL_DA3_NESTED: str = "depth-anything/DA3NESTED-GIANT-LARGE-1.1"
 
@@ -28,7 +31,7 @@ class Config:
     MODEL_SAM3_PATH: str = "/home/seqn/sam3/sam3.pt"
 
     # Default model selections
-    MODEL_VLM_DEFAULT: str = MODEL_QWEN_4B
+    MODEL_VLM_DEFAULT: str = MODEL_QWEN_2B
     MODEL_DA3_DEFAULT: str = MODEL_DA3_LARGE
 
     # ===================== Network Configuration =====================
@@ -48,6 +51,14 @@ class Config:
 
     # ===================== Runtime Configuration =====================
     ROS_CLIENT_ENABLE_LOG: bool = False
+
+    # ===================== Camera Configuration =====================
+    CAMERA_INTRINSICS: CameraIntrinsics = CameraIntrinsics(
+        503.640273, 502.167721, 312.565456, 244.436855
+    )
+    DISTORTION_COEFFS: DistortionCoefficients = DistortionCoefficients(
+        0.148509, -0.255395, 0.003505, 0.001639, 0.0
+    )
 
     def __post_init__(self):
         """Post-initialization setup."""

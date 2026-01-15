@@ -14,6 +14,16 @@ class CameraIntrinsics(NamedTuple):
     cy: float
 
 
+class DistortionCoefficients(NamedTuple):
+    """相机畸变系数数据结构（带类型标注）"""
+
+    k1: float
+    k2: float
+    p1: float
+    p2: float
+    k3: float
+
+
 class Position(NamedTuple):
     """位置数据结构（带类型标注）"""
 
@@ -89,7 +99,6 @@ class ImageInfo(NamedTuple):
 class TrackingResult(NamedTuple):
     """跟踪数据最终结果（带完整类型标注，作为闭环方法返回值）"""
 
-    intrinsics: CameraIntrinsics
     success: bool
     camera_pose: CameraPose
     point_cloud_camera_info: PointCloudInfo

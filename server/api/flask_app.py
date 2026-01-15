@@ -11,12 +11,14 @@ from typing import Optional
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
+from ros_api import TrackingDataClient, TrackingResult
+
 from ..config import config
 from ..depth.comparison import plot_depth_comparison, save_da3_depth_with_ros_keypoints
 from ..depth.generator import generate_depth_map
+from ..depth.pointcloud import PointCloudValidator
+from ..image.convert import cv2_to_pil
 from ..models.model_loader import ModelManager
-from ..ros.client import TrackingClient
-from ..ros.data_processor import extract_image_shape, get_image_from_ros
 from ..text.generator import generate_text_stream
 
 
@@ -68,31 +70,38 @@ def create_flask_app(model_manager: Optional[ModelManager] = None) -> Flask:
         try:
             # 2. Create new ROS client for this request
             print(f"[{timestamp}] 🔍 Creating new ROS client instance...")
-            with TrackingClient(enable_log=config.ROS_CLIENT_ENABLE_LOG) as ros_client:
-                if not ros_client.is_connected():
-                    raise Exception("Failed to create ROS client instance")
+            ros_client = TrackingDataClient(
+                server_ip=config.ROS_SERVER_IP,
+                port=config.ROS_SERVER_PORT,
+                enable_log=config.ROS_CLIENT_ENABLE_LOG,
+            )
 
-                # 3. Get image and point cloud data from ROS
-                print(
-                    f"[{timestamp}] 🔍 Getting image and point cloud data from ROS..."
-                )
-                (
-                    pil_image,
-                    image_path,
-                    camera_point_cloud,
-                    world_point_cloud,
-                    cv_image,
-                ) = get_image_from_ros(ros_client, timestamp)
-                if not pil_image:
-                    raise Exception(image_path)  # image_path contains error message
+            # 3. Get tracking data from ROS
+            print(f"[{timestamp}] 🔍 Getting tracking data from ROS...")
+            tracking_result: Optional[TrackingResult] = (
+                ros_client.complete_tracking_pipeline()
+            )
 
-                # 4. Stream text generation response
-                return Response(
-                    generate_text_stream(
-                        text_query, image_path, timestamp, model_manager
-                    ),
-                    mimetype="text/event-stream",
-                )
+            if not tracking_result or not tracking_result.success:
+                error_msg = "Failed to get tracking data from ROS"
+                if tracking_result and not tracking_result.success:
+                    error_msg = "ROS service returned failure status"
+                raise Exception(error_msg)
+
+            if tracking_result.current_image is None:
+                raise Exception("No image in tracking result")
+
+            # 4. Convert OpenCV image to PIL Image and save
+            cv_image = tracking_result.current_image
+            (_, image_save_path) = cv2_to_pil(cv_image)
+
+            # 5. Stream text generation response
+            return Response(
+                generate_text_stream(
+                    text_query, image_save_path, timestamp, model_manager
+                ),
+                mimetype="text/event-stream",
+            )
 
         except Exception as e:
             error_msg = f"[{timestamp}] ❌ Error: {str(e)}"
@@ -109,55 +118,86 @@ def create_flask_app(model_manager: Optional[ModelManager] = None) -> Flask:
         try:
             # Create new ROS client
             print(f"[{timestamp}] 🔍 Creating new ROS client for depth generation...")
-            with TrackingClient(enable_log=config.ROS_CLIENT_ENABLE_LOG) as ros_client:
-                if not ros_client.is_connected():
-                    raise Exception("Failed to create ROS client instance")
+            ros_client = TrackingDataClient(
+                server_ip=config.ROS_SERVER_IP,
+                port=config.ROS_SERVER_PORT,
+                enable_log=config.ROS_CLIENT_ENABLE_LOG,
+            )
 
-                # Get image from ROS
-                print(f"[{timestamp}] 🔍 Getting image from ROS...")
-                (
-                    pil_image,
-                    image_path,
-                    camera_point_cloud,
-                    world_point_cloud,
-                    cv_image,
-                ) = get_image_from_ros(ros_client, timestamp)
-                if not pil_image:
-                    raise Exception(image_path)
+            # Get tracking data from ROS
+            print(f"[{timestamp}] 🔍 Getting tracking data from ROS...")
+            tracking_result: Optional[TrackingResult] = (
+                ros_client.complete_tracking_pipeline()
+            )
 
-                # Get image dimensions
-                if cv_image is None:
-                    raise Exception("cv_image is None")
-                image_shape = extract_image_shape(cv_image)
+            if not tracking_result or not tracking_result.success:
+                error_msg = "Failed to get tracking data from ROS"
+                if tracking_result and not tracking_result.success:
+                    error_msg = "ROS service returned failure status"
+                raise Exception(error_msg)
 
-                # Generate depth map
-                print(f"[{timestamp}] 📊 Generating DA3 depth map...")
-                da3_depth_map = generate_depth_map(
-                    image_path, image_shape, model_manager
+            if tracking_result.current_image is None:
+                raise Exception("No image in tracking result")
+
+            # Convert OpenCV image to PIL Image and save
+            cv_image = tracking_result.current_image
+            (_, image_save_path) = cv2_to_pil(cv_image)
+
+            # Get image dimensions
+            image_shape = (int(cv_image.shape[0]), int(cv_image.shape[1]))  # (h, w)
+
+            # Generate depth map
+            print(f"[{timestamp}] 📊 Generating DA3 depth map...")
+            da3_depth_map = generate_depth_map(
+                image_save_path, image_shape, model_manager
+            )
+
+            # Create visualizations
+            camera_point_cloud = tracking_result.tracked_points_camera
+            world_point_cloud = tracking_result.tracked_points_world
+
+            if camera_point_cloud is not None and camera_point_cloud.size > 0:
+                plot_depth_comparison(
+                    camera_point_cloud, da3_depth_map, timestamp, image_shape
+                )
+                save_da3_depth_with_ros_keypoints(
+                    da3_depth_map, camera_point_cloud, timestamp, image_shape
                 )
 
-                # Create visualizations
-                if camera_point_cloud is not None:
-                    plot_depth_comparison(
-                        camera_point_cloud, da3_depth_map, timestamp, image_shape
-                    )
-                    save_da3_depth_with_ros_keypoints(
-                        da3_depth_map, camera_point_cloud, timestamp, image_shape
-                    )
+            # Validate point cloud using PointCloudValidator
+            if (
+                camera_point_cloud is not None
+                and camera_point_cloud.size > 0
+                and world_point_cloud is not None
+                and world_point_cloud.size > 0
+                and tracking_result.camera_pose is not None
+            ):
+                validator = PointCloudValidator(tracking_result.camera_pose)
 
-                # Return success response with file paths
-                response_data = {
-                    "timestamp": timestamp,
-                    "image_path": image_path,
-                    "depth_map_shape": da3_depth_map.shape,
-                    "depth_plot_path": config.get_depth_plot_path(timestamp),
-                    "da3_depth_path": config.get_da3_depth_path(timestamp),
-                    "da3_depth_keypoints_path": config.get_da3_depth_with_keypoints_path(
-                        timestamp
-                    ),
-                }
+                error_metrics, point_errors = validator.validate_point_cloud(
+                    camera_point_cloud, world_point_cloud
+                )
 
-                return jsonify(response_data)
+                print(f"[{timestamp}] 📊 Point cloud validation results:")
+                print(f"  • Point count: {error_metrics['point_count']}")
+                print(f"  • Mean error: {error_metrics['mean_error']:.6f}")
+                print(f"  • Max error: {error_metrics['max_error']:.6f}")
+                print(f"  • Min error: {error_metrics['min_error']:.6f}")
+                print(f"  • RMSE: {error_metrics['rmse']:.6f}")
+
+            # Return success response with file paths
+            response_data = {
+                "timestamp": timestamp,
+                "image_path": image_save_path,
+                "depth_map_shape": da3_depth_map.shape,
+                "depth_plot_path": config.get_depth_plot_path(timestamp),
+                "da3_depth_path": config.get_da3_depth_path(timestamp),
+                "da3_depth_keypoints_path": config.get_da3_depth_with_keypoints_path(
+                    timestamp
+                ),
+            }
+
+            return jsonify(response_data)
 
         except Exception as e:
             error_msg = f"[{timestamp}] ❌ Depth generation error: {str(e)}"

@@ -85,10 +85,8 @@ def generate_text_stream(
 
         # 3. Move inputs to appropriate device
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        inputs = inputs.to(
-            device,
-            dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-        )
+        dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+        inputs = inputs.to(device=device, dtype=dtype)
 
         # 4. Initialize streaming generator
         tokenizer = (
@@ -125,97 +123,6 @@ def generate_text_stream(
         error_msg = f"Text generation failed: {str(e)}"
         print(f"[{timestamp}] ❌ {error_msg}")
         yield f"data: {error_msg}\n\n"
-
-
-def generate_text_batch(
-    text_query: str,
-    image_path: str,
-    model_manager: ModelManager,
-    max_new_tokens: int = config.MAX_NEW_TOKENS,
-) -> str:
-    """
-    Generate text response in batch mode (non-streaming).
-
-    Args:
-        text_query: Text query/instruction
-        image_path: Image file path
-        model_manager: ModelManager instance with VLM loaded
-        max_new_tokens: Maximum number of new tokens to generate
-
-    Returns:
-        Generated text response
-
-    Raises:
-        ValueError: If VLM model not loaded
-        Exception: If text generation fails
-    """
-    if not model_manager.is_vlm_loaded():
-        raise ValueError("VLM model not loaded")
-
-    processor = model_manager.get_processor()
-    model_vlm = model_manager.get_vlm()
-
-    try:
-        # Build conversation messages
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "path": image_path},
-                    {"type": "text", "text": text_query},
-                ],
-            },
-        ]
-
-        # Apply chat template and encode
-        if hasattr(processor, "apply_chat_template"):
-            inputs = processor.apply_chat_template(
-                messages,
-                add_generation_prompt=True,
-                tokenize=True,
-                return_dict=True,
-                return_tensors="pt",
-            )
-        else:
-            tokenizer = (
-                processor.tokenizer if hasattr(processor, "tokenizer") else processor
-            )
-            text = tokenizer.apply_chat_template(
-                messages,
-                add_generation_prompt=True,
-                tokenize=False,
-            )
-            inputs = tokenizer(text, return_tensors="pt")
-
-        # Move inputs to appropriate device
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        inputs = inputs.to(
-            device,
-            dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-        )
-
-        # Generate text
-        with torch.no_grad():
-            outputs = model_vlm.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=True,
-                num_beams=1,
-            )
-
-        # Decode generated text
-        tokenizer = (
-            processor.tokenizer if hasattr(processor, "tokenizer") else processor
-        )
-        generated_text = tokenizer.decode(
-            outputs[0][inputs["input_ids"].shape[1] :],
-            skip_special_tokens=True,
-        )
-
-        return generated_text
-
-    except Exception as e:
-        raise Exception(f"Batch text generation failed: {str(e)}")
 
 
 def validate_text_query(text_query: str) -> tuple[bool, str]:
