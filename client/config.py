@@ -37,8 +37,11 @@ class ClientConfig:
     CAMERA_INTRINSICS_FY: float = 502.167721
     CAMERA_INTRINSICS_CX: float = 312.565456
     CAMERA_INTRINSICS_CY: float = 244.436855
-
     DISTORTION_COEFFS: tuple = (0.148509, -0.255395, 0.003505, 0.001639, 0.0)
+
+    # Doubao model configuration
+    DOUBAO_MODEL_ENDPOINT: str = "doubao-seed-1-6-251015"
+    DOUBAO_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
 
     def get_image_path(self, timestamp: str) -> str:
         """Get full image path for a timestamp."""

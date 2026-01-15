@@ -1,10 +1,10 @@
 """
 VLM Client - Client for Vision Language Model TCP server.
 Connects to VLM server on port 21122 using binary protocol.
-Falls back to Doubao API if local server is unavailable.
+Falls back to Doubao API (using Base64) if local server is unavailable.
 """
 
-import asyncio
+import base64
 import os
 import socket
 import struct
@@ -13,7 +13,7 @@ from typing import Generator, Optional
 from dotenv import load_dotenv
 
 # --- VolcEngine Imports (Assumed available per requirements) ---
-from volcenginesdkarkruntime import AsyncArk
+from volcenginesdkarkruntime import Ark
 from volcenginesdkarkruntime.types.responses import (
     ResponseCompletedEvent,
     ResponseOutputItemAddedEvent,
@@ -26,10 +26,6 @@ from .config import client_config
 
 # Load environment variables from .env file
 load_dotenv()
-
-# Doubao Configuration
-DOUBAO_MODEL_ENDPOINT = "doubao-seed-1-6-251015"
-DOUBAO_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
 
 
 class VLMClient:
@@ -64,89 +60,84 @@ class VLMClient:
             data += chunk
         return data
 
-    async def _doubao_stream_async(self, image_path: str, text_query: str):
-        """
-        Async generator that interacts with Doubao API using streaming.
-        """
-        api_key = os.getenv("ARK_API_KEY")
-        if not api_key:
-            raise ValueError("Environment variable 'ARK_API_KEY' is missing.")
+    def _encode_file_to_base64(self, file_path: str) -> str:
+        """Helper to read file and convert to base64 string."""
+        with open(file_path, "rb") as read_file:
+            return base64.b64encode(read_file.read()).decode("utf-8")
 
-        client = AsyncArk(base_url=DOUBAO_BASE_URL, api_key=api_key)
-
-        abs_path = os.path.abspath(image_path)
-
-        stream = await client.responses.create(
-            model=DOUBAO_MODEL_ENDPOINT,
-            input=[
-                {  # pyright: ignore[reportArgumentType]
-                    "role": "user",
-                    "content": [
-                        {"type": "input_image", "image_url": f"file://{abs_path}"},
-                        {"type": "input_text", "text": text_query},
-                    ],
-                },
-            ],
-            caching={
-                "type": "enabled",
-            },
-            store=True,
-            stream=True,
-        )
-
-        async for event in stream:  # pyright: ignore[reportGeneralTypeIssues]
-            # Handle specific event types as requested
-            if isinstance(event, ResponseReasoningSummaryTextDeltaEvent):
-                yield event.delta
-            elif isinstance(event, ResponseTextDeltaEvent):
-                yield event.delta
-            # Optional: You can choose to yield or log other events if needed
-            # For a pure text generator replacement, we usually just want the content deltas.
-            # However, for debugging purposes (like in your snippet), here are the others:
-            elif isinstance(event, ResponseOutputItemAddedEvent):
-                # Usually metadata, skipping for pure text generation stream
-                pass
-            elif isinstance(event, ResponseTextDoneEvent):
-                # End of specific block
-                pass
-            elif isinstance(event, ResponseCompletedEvent):
-                # Final usage stats
-                pass
+    def _get_image_mime_type(self, file_path: str) -> str:
+        """Simple helper to guess mime type from extension."""
+        if file_path.lower().endswith(".png"):
+            return "image/png"
+        elif file_path.lower().endswith((".jpg", ".jpeg")):
+            return "image/jpeg"
+        elif file_path.lower().endswith(".webp"):
+            return "image/webp"
+        return "image/jpeg"  # Default fallback
 
     def fallback_to_doubao(
         self, image_path: str, text_query: str
     ) -> Generator[str, None, None]:
         """
-        Wraps the async Doubao stream in a synchronous generator.
+        Executes the Doubao API logic synchronously using Base64 and yields the result.
         """
         print("(⚠️ Local VLM server unavailable, falling back to Doubao API...)")
 
+        api_key = os.getenv("ARK_API_KEY")
+        if not api_key:
+            yield "Error: ARK_API_KEY environment variable is not set."
+            return
+
         try:
-            # We need to bridge async generator to sync generator.
-            # Ideally, one would rewrite the whole client to be async, but to fit the existing interface:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            # 1. Encode Image to Base64
+            base64_image = self._encode_file_to_base64(image_path)
+            mime_type = self._get_image_mime_type(image_path)
 
-            async_gen = self._doubao_stream_async(image_path, text_query)
+            # 2. Initialize Client
+            client = Ark(base_url=client_config.DOUBAO_BASE_URL, api_key=api_key)
 
-            while True:
-                try:
-                    # Get the next chunk from the async generator
-                    chunk = loop.run_until_complete(async_gen.__anext__())
-                    yield chunk
-                except StopAsyncIteration:
-                    break
+            # 3. Create Stream
+            stream = client.responses.create(
+                model=client_config.DOUBAO_MODEL_ENDPOINT,
+                input=[
+                    {  # pyright: ignore[reportArgumentType]
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "input_image",
+                                "image_url": f"data:{mime_type};base64,{base64_image}",
+                            },
+                            {"type": "input_text", "text": text_query},
+                        ],
+                    }
+                ],
+                stream=True,
+            )
 
-            loop.close()
+            # 4. Process Stream
+            for event in stream:
+                if isinstance(event, ResponseReasoningSummaryTextDeltaEvent):
+                    yield event.delta
+                elif isinstance(event, ResponseTextDeltaEvent):
+                    yield event.delta
+                elif isinstance(event, ResponseOutputItemAddedEvent):
+                    # Usually metadata, skipping for pure text generation stream
+                    pass
+                elif isinstance(event, ResponseTextDoneEvent):
+                    # End of specific block
+                    pass
+                elif isinstance(event, ResponseCompletedEvent):
+                    # Final usage stats
+                    pass
 
-        except ValueError as e:
-            yield f"\nConfiguration Error: {str(e)}"
+        except FileNotFoundError:
+            yield f"Error: Image file not found at {image_path}"
         except Exception as e:
-            yield f"\nDoubao API Error: {str(e)}"
+            yield f"Doubao API Error: {str(e)}"
 
     def generate(self, image_path: str, text_query: str) -> Generator[str, None, None]:
         """
-        Generate text from VLM with streaming response.
+        Generate text from VLM.
         Prioritizes Local TCP -> Falls back to Doubao API.
         """
         local_available = False
@@ -179,15 +170,12 @@ class VLMClient:
 
             # Receive text chunks
             while True:
-                # Receive chunk length
                 length_data = self.recv_all(4)
                 chunk_length = struct.unpack(">I", length_data)[0]
 
-                # If length is 0, end of stream
                 if chunk_length == 0:
                     break
 
-                # Receive chunk data
                 chunk_data = self.recv_all(chunk_length)
                 chunk_text = chunk_data.decode("utf-8")
 

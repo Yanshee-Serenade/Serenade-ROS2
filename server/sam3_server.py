@@ -31,6 +31,7 @@ class SAM3Server:
         model = build_sam3_image_model(
             load_from_HF=False,
             checkpoint_path=config.MODEL_SAM3_PATH,
+            compile=True,
         )
         self.processor = Sam3Processor(model)
         print(f"{datetime.datetime.now()} > ✅ SAM3 model ready!")
