@@ -12,7 +12,7 @@ def calibrate_scale():
 
     # 1. Initialize Client
     walker = create_walker(1000)
-    client = CameraPoseClient(host="localhost", port=51118)
+    client = CameraPoseClient(host="localhost", port=21118)
 
     # We get the generator once so we keep the same TCP connection open
     stream_iterator = client.stream()

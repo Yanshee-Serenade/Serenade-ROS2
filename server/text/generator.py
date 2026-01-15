@@ -100,7 +100,7 @@ def generate_text_stream(
 
         # 5. Build generation parameters
         generation_kwargs = {
-            "inputs": inputs,
+            **inputs,
             "streamer": streamer,
             "max_new_tokens": config.MAX_NEW_TOKENS,
             "do_sample": True,
@@ -117,14 +117,14 @@ def generate_text_stream(
         # 7. Stream generated results
         for new_text in streamer:
             if new_text:
-                yield f"data: {json.dumps({'text': new_text})}\n\n"
+                yield f"data: {new_text}\n\n"
 
         print(f"[{timestamp}] ✅ Text generation completed")
 
     except Exception as e:
         error_msg = f"Text generation failed: {str(e)}"
         print(f"[{timestamp}] ❌ {error_msg}")
-        yield f"data: {json.dumps({'text': f'❌ {error_msg}'})}\n\n"
+        yield f"data: {error_msg}\n\n"
 
 
 def generate_text_batch(

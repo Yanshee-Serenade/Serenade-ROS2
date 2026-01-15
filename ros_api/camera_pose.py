@@ -7,7 +7,7 @@ from ros_api.model import CameraPoseData, Position
 
 
 class CameraPoseClient:
-    def __init__(self, host="localhost", port=51118, scale=1.0):
+    def __init__(self, host="localhost", port=21118, scale=1.0):
         self.host = host
         self.port = port
         self.sock = None

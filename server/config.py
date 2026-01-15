@@ -33,9 +33,9 @@ class Config:
 
     # ===================== Network Configuration =====================
     ROS_SERVER_IP: str = "127.0.0.1"
-    ROS_SERVER_PORT: int = 51121
+    ROS_SERVER_PORT: int = 21121
     FLASK_HOST: str = "0.0.0.0"
-    FLASK_PORT: int = 51122
+    FLASK_PORT: int = 21122
 
     # ===================== Generation Configuration =====================
     MAX_NEW_TOKENS: int = 256

@@ -5,12 +5,12 @@ from typing import List, Optional, Tuple, Union
 
 
 class JointAngleTCPClient:
-    """关节角度TCP客户端，连接本地51120端口的ROS服务器（重构版，带类型标注）"""
+    """关节角度TCP客户端，连接本地21120端口的ROS服务器（重构版，带类型标注）"""
 
     def __init__(
         self,
         host: str = "localhost",
-        port: int = 51120,
+        port: int = 21120,
         timeout: int = 10,
         enable_log: bool = True,
         log_level: int = logging.INFO,
@@ -18,7 +18,7 @@ class JointAngleTCPClient:
         """
         初始化客户端
         :param host: 服务器地址（默认localhost）
-        :param port: 服务器端口（默认51120）
+        :param port: 服务器端口（默认21120）
         :param timeout: 连接/接收超时时间（秒）
         :param enable_log: 是否启用日志
         :param log_level: 日志级别

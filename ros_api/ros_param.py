@@ -4,7 +4,7 @@ import socket
 
 
 class ROSParamClient:
-    def __init__(self, host="localhost", port=51119):
+    def __init__(self, host="localhost", port=21119):
         self.host = host
         self.port = port
 

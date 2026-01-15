@@ -6211,7 +6211,7 @@ class ukit_controller:
         self.recv_addr = (self.recv_ip, self.port)
 
     def __auto_find_broadcast_ip(self):
-        ipstr = "([0-9]{1,3}\.){3}[0-9]{1,3}"  # pyright: ignore[reportInvalidStringEscapeSequence]
+        ipstr = r"([0-9]{1,3}\.){3}[0-9]{1,3}"
         ipconfig_process = subprocess.Popen("ifconfig", stdout=subprocess.PIPE)
         output = ipconfig_process.stdout.read()  # pyright: ignore[reportOptionalMemberAccess]
         broad_pattern = re.compile("(broadcast %s)" % ipstr)

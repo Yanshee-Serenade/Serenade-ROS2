@@ -33,7 +33,7 @@ class TrackingDataClient:
     def __init__(
         self,
         server_ip: str = "127.0.0.1",
-        port: int = 51121,
+        port: int = 21121,
         enable_log: bool = True,
         log_level: int = logging.INFO,
     ):

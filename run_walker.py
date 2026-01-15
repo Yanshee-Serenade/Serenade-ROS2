@@ -5,7 +5,7 @@ from walker import WalkSequence, create_walker
 
 def main():
     walker = create_walker(400)
-    walker.set_scale(29.6057985)
+    walker.set_scale(69.4230176)
 
     # Wait for camera
     time.sleep(1)

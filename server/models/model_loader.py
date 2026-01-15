@@ -12,7 +12,7 @@ import torch
 from depth_anything_3.api import DepthAnything3
 from sam3.model.sam3_image_processor import Sam3Processor
 from sam3.model_builder import build_sam3_image_model
-from transformers import AutoModelForCausalLM, AutoProcessor
+from transformers import AutoModelForImageTextToText, AutoProcessor
 
 from ..config import config
 
@@ -46,7 +46,7 @@ class ModelManager:
 
             # 2. Load model
             print(f"{time.time()} > Loading model weights...", flush=True)
-            self.model_vlm = AutoModelForCausalLM.from_pretrained(
+            self.model_vlm = AutoModelForImageTextToText.from_pretrained(
                 model_path, load_in_8bit=True
             )
 

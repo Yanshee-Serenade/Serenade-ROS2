@@ -17,11 +17,11 @@ def create_walker(
     period_ms: int = 200,
     lib_path: str = "./libyanshee_kinematics.so",
     host: str = "localhost",
-    port: int = 51120,
+    port: int = 21120,
     timeout: int = 10,
     use_mock: bool = False,
     camera_pose_host: str = "localhost",
-    camera_pose_port: int = 51118,
+    camera_pose_port: int = 21118,
     use_camera_pose: bool = True,
 ) -> RobotWalker:
     """
