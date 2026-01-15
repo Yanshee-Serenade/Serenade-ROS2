@@ -1,42 +1,20 @@
 """
-Server module for AI vision and depth estimation.
+Server module for AI vision models.
 
-This module provides a modular system for:
-- ROS data acquisition and processing
-- AI model loading and management
-- Depth estimation and comparison
-- Flask API for vision queries
+Provides three independent TCP servers:
+- VLM Server (port 21122): Vision Language Model inference
+- DA3 Server (port 21123): Depth Anything 3 depth estimation
+- SAM3 Server (port 21124): SAM3 segmentation
 """
 
-from .api.flask_app import create_flask_app, run_server
-from .config import Config
-from .depth.comparison import plot_depth_comparison, save_da3_depth_with_ros_keypoints
-from .depth.generator import generate_depth_map
-from .image.convert import cv2_to_pil
-from .models.model_loader import (
-    ModelManager,
-    load_model_da3,
-    load_model_sam3,
-    load_model_vlm,
-)
-from .text.generator import generate_text_stream
+from .config import config
+from .da3_server import run_da3_server
+from .sam3_server import run_sam3_server
+from .vlm_server import run_vlm_server
 
 __all__ = [
-    # Main entry points
-    "create_flask_app",
-    "run_server",
-    "Config",
-    # Model management
-    "ModelManager",
-    "load_model_vlm",
-    "load_model_da3",
-    "load_model_sam3",
-    # Depth processing
-    "generate_depth_map",
-    "plot_depth_comparison",
-    "save_da3_depth_with_ros_keypoints",
-    # Text generation
-    "generate_text_stream",
-    # Image conversion
-    "cv2_to_pil",
+    "config",
+    "run_vlm_server",
+    "run_da3_server",
+    "run_sam3_server",
 ]

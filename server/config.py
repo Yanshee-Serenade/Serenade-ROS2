@@ -5,7 +5,6 @@ This module defines all configuration constants used throughout the server,
 including model paths, network settings, and generation parameters.
 """
 
-import os
 from dataclasses import dataclass
 
 from ros_api import CameraIntrinsics, DistortionCoefficients
@@ -38,7 +37,9 @@ class Config:
     ROS_SERVER_IP: str = "127.0.0.1"
     ROS_SERVER_PORT: int = 21121
     FLASK_HOST: str = "0.0.0.0"
-    FLASK_PORT: int = 21122
+    VLM_PORT: int = 21122
+    DA3_PORT: int = 21123
+    SAM3_PORT: int = 21124
 
     # ===================== Generation Configuration =====================
     MAX_NEW_TOKENS: int = 256
@@ -59,32 +60,6 @@ class Config:
     DISTORTION_COEFFS: DistortionCoefficients = DistortionCoefficients(
         0.148509, -0.255395, 0.003505, 0.001639, 0.0
     )
-
-    def __post_init__(self):
-        """Post-initialization setup."""
-        # Ensure image directory exists
-        os.makedirs("images", exist_ok=True)
-
-    @property
-    def image_save_dir(self) -> str:
-        """Get the image save directory."""
-        return os.path.dirname(self.IMAGE_SAVE_PREFIX)
-
-    def get_image_path(self, timestamp: str) -> str:
-        """Get full image path for a timestamp."""
-        return f"{self.IMAGE_SAVE_PREFIX}{timestamp}.jpg"
-
-    def get_depth_plot_path(self, timestamp: str) -> str:
-        """Get full depth plot path for a timestamp."""
-        return f"{self.DEPTH_PLOT_SAVE_PREFIX}{timestamp}.png"
-
-    def get_da3_depth_path(self, timestamp: str) -> str:
-        """Get full DA3 depth image path for a timestamp."""
-        return f"{self.DA3_DEPTH_SAVE_PREFIX}{timestamp}.png"
-
-    def get_da3_depth_with_keypoints_path(self, timestamp: str) -> str:
-        """Get full DA3 depth with keypoints path for a timestamp."""
-        return f"{self.DA3_DEPTH_WITH_KEYPOINTS_SAVE_PREFIX}{timestamp}.png"
 
 
 # Global configuration instance
