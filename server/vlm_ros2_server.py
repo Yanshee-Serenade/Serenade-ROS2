@@ -24,7 +24,7 @@ from transformers import (
 )
 from threading import Thread
 
-from .config import config
+from server.config import config
 
 
 class VLMServerNode(Node):

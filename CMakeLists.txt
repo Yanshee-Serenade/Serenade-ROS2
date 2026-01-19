@@ -9,6 +9,14 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 
+# Install Python packages
+ament_python_install_package(chatbot)
+ament_python_install_package(client)
+ament_python_install_package(ros_api)
+ament_python_install_package(server)
+ament_python_install_package(walker)
+
+# Install Python executables
 install(PROGRAMS
   chatbot/main.py
   DESTINATION lib/${PROJECT_NAME}

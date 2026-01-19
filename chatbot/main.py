@@ -12,7 +12,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
-from .assistant import VoiceAssistant
+from chatbot.assistant import VoiceAssistant
 
 # 不启用分段 TTS，因为 TTS 分段延迟太大。在模型 8bit 量化的情况下，鸡煲输出的短一些延迟就会很低
 SEGMENT_TTS = False
