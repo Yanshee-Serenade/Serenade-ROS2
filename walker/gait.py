@@ -312,6 +312,7 @@ class WalkSequence(CyclingSequence):
         # Parameters (Tune these!)
         # K_yaw: How hard to correct for angle errors (Start small: 0.05 to 0.1)
         # K_lat: How hard to correct for lateral drift (Start small: 0.1 to 0.3)
+        SCALE_FACTOR = 16  # Hard-coded scale factor for ORB-SLAM3
         MAX_CORRECTION = 0.005  # Meters
         K_yaw = 4 * MAX_CORRECTION
         K_lat = 20 * MAX_CORRECTION
@@ -376,6 +377,7 @@ class WalkSequence(CyclingSequence):
                 # If backward is True, we invert the sign of yaw_error.
                 yaw_error = -yaw_error if self.backward else yaw_error
                 right_spin = (K_yaw * yaw_error) + (K_lat * lat_error)
+                right_spin *= SCALE_FACTOR
 
                 # Clip limits to prevent falling
                 right_spin = max(min(right_spin, MAX_CORRECTION), -MAX_CORRECTION)
