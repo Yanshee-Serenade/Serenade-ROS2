@@ -11,9 +11,8 @@ find_package(ament_cmake_python REQUIRED)
 
 # Install Python packages
 ament_python_install_package(serenade_chatbot)
-ament_python_install_package(serenade_client)
+ament_python_install_package(serenade_node)
 ament_python_install_package(serenade_ros_api)
-ament_python_install_package(serenade_server)
 ament_python_install_package(serenade_walker)
 
 # Install Python executables
@@ -23,7 +22,7 @@ install(PROGRAMS
   RENAME chatbot_node
 )
 install(PROGRAMS
-  serenade_server/vlm_ros2_server.py
+  serenade_node/vlm_server_node.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME vlm_server_node
 )
@@ -33,9 +32,14 @@ install(PROGRAMS
   RENAME walker_node
 )
 install(PROGRAMS
-  serenade_client/pointcloud_ros2_node.py
+  serenade_node/pointcloud_validator_node.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME pointcloud_validator_node
+)
+install(PROGRAMS
+  serenade_node/image_bridge_node.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME image_bridge_node
 )
 
 install(DIRECTORY
