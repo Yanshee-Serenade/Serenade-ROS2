@@ -1,4 +1,4 @@
-FROM depth_anything_3_ros2:base
+FROM depth_anything_3_ros2:base2
 LABEL maintainer="subcat2077@gmail.com"
 
 USER root

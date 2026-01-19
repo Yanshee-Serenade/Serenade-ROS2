@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Walker ROS2 Node - Runs the robot walker indefinitely.
 """

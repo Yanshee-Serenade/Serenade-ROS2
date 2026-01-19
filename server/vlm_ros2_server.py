@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 VLM Server - ROS2 node for Vision Language Model inference.
 Subscribes to 'question' topic and publishes answers to 'answer' topic.

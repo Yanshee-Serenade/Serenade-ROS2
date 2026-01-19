@@ -4,12 +4,12 @@
 		"dockerfile": "Dockerfile",
 		"context": "../../" 
 	},
-	"workspaceFolder": "/overlay_ws/src/Serenade-ROS2",
+	"workspaceFolder": "/ros2_ws/src/Serenade-ROS2",
 	"remoteUser": "root", 
 	"runArgs": [
 		"--network=host",
 		"--privileged",
-		"-v", ".:/overlay_ws/src/Serenade-ROS2"
+		"-v", ".:/ros2_ws/src/Serenade-ROS2"
 	],
 	"customizations": {
 		"vscode": {

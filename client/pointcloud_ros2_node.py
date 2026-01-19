@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Pointcloud Validation ROS2 Node - Validates point cloud transformations.
 Subscribes to ROS2 topics for point clouds and camera info.

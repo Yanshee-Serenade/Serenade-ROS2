@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Main entry point for the chatbot voice assistant with ROS2 integration.
 
