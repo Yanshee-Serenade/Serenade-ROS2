@@ -188,7 +188,7 @@ def main():
     parser.add_argument(
         "--test",
         choices=["all", "vlm", "da3", "sam3", "comparison", "pointcloud"],
-        default="sam3",
+        default="comparison",
         help="Which client(s) to test (default: all)",
     )
     parser.add_argument(

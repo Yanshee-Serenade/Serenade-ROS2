@@ -6,6 +6,7 @@ Validates point cloud transformations from camera to world coordinates.
 import datetime
 from typing import Dict, Optional, Tuple
 
+import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
@@ -16,6 +17,8 @@ from ros_api import (
 )
 
 from .config import client_config
+
+REFERENCE_SCALE = 7.9470454
 
 
 class PointCloudValidator:
@@ -89,32 +92,24 @@ class PointCloudValidator:
     def _undistort_to_normalized_coords(
         self, pixel_x: float, pixel_y: float
     ) -> Tuple[float, float]:
-        """Distortion correction to get undistorted normalized image coordinates."""
-        fx, fy, cx, cy = (
-            self.intrinsics.fx,
-            self.intrinsics.fy,
-            self.intrinsics.cx,
-            self.intrinsics.cy,
-        )
-        k1, k2, p1, p2, k3 = self.distortion_coeffs
-
-        # Step 1: Pixel coordinates -> original normalized image coordinates
-        u = (pixel_x - cx) / fx
-        v = (pixel_y - cy) / fy
-
-        # Step 2: Calculate radial distortion parameters
-        r_sq = u**2 + v**2
-        r_4 = r_sq**2
-        r_6 = r_sq**3
-        dist_radial = 1 + k1 * r_sq + k2 * r_4 + k3 * r_6
-
-        # Step 3: Calculate tangential distortion correction
-        delta_u = 2 * p1 * u * v + p2 * (r_sq + 2 * u**2)
-        delta_v = p1 * (r_sq + 2 * v**2) + 2 * p2 * u * v
-
-        # Step 4: Undistorted normalized coordinates
-        u_undist = u * dist_radial + delta_u
-        v_undist = v * dist_radial + delta_v
+        """
+        FIX: Use OpenCV to correctly solve the inverse distortion model.
+        Returns normalized coordinates (x', y') such that:
+        [x', y', 1] is the direction vector in camera frame.
+        """
+        # Prepare input format for cv2 (N, 1, 2)
+        src_pt = np.array([[[pixel_x, pixel_y]]], dtype=np.float64)
+        
+        # Make sure distortion coeffs are numpy array
+        dist_coeffs = np.array(self.distortion_coeffs, dtype=np.float64)
+        
+        # cv2.undistortPoints returns normalized coordinates if P (projection mat) is empty
+        # It handles the iterative undistortion internally.
+        dst_pt = cv2.undistortPoints(src_pt, self.K, dist_coeffs)
+        
+        # Extract u, v from shape (1, 1, 2)
+        u_undist = dst_pt[0, 0, 0]
+        v_undist = dst_pt[0, 0, 1]
 
         return u_undist, v_undist
 
@@ -162,7 +157,9 @@ class PointCloudValidator:
         for i in range(point_count):
             world_pred = self.camera_point_to_world_point(camera_point_cloud[i])
             world_actual = world_point_cloud[i]
-            point_errors[i] = np.linalg.norm(world_pred - world_actual)
+            point_errors[i] = (
+                np.linalg.norm(world_pred - world_actual) * REFERENCE_SCALE
+            )
 
         error_metrics = {
             "point_count": float(point_count),

@@ -1,0 +1,3 @@
+[submodule "external-server-reference-readonly"]
+	path = external-server-reference-readonly
+	url = https://github.com/Yanshee-Serenade/Serenade-ROS
