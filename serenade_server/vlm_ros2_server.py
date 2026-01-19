@@ -75,7 +75,7 @@ class VLMServerNode(Node):
             self.model_vlm = AutoModelForImageTextToText.from_pretrained(
                 model_path,
                 quantization_config=bnb_config,
-                device_map="auto",
+                device_map="cuda",
             )
             self.model_vlm.eval()
             self.get_logger().info("✅ VLM model loaded successfully!")

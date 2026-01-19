@@ -14,7 +14,6 @@ from scipy.spatial.transform import Rotation as R
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2, CameraInfo
-from geometry_msgs.msg import TransformStamped
 
 from serenade_client.config import client_config
 
