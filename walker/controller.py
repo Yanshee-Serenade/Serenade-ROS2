@@ -7,6 +7,7 @@ state transitions, and robot motion control.
 
 import time
 from typing import List, Optional
+from geometry_msgs.msg import PoseStamped
 
 from .gait import (
     BaseSequence,
@@ -185,7 +186,7 @@ class RobotWalker:
         """
         return time.time() - self.start_time
 
-    def get_camera_pose(self) -> Optional[object]:
+    def get_camera_pose(self) -> Optional[PoseStamped]:
         """
         Get the latest camera pose.
 

@@ -316,7 +316,7 @@ class WalkSequence(CyclingSequence):
         K_yaw = 4 * MAX_CORRECTION
         K_lat = 20 * MAX_CORRECTION
 
-        if self.init_pose and self.walker.camera_pose_client:
+        if self.init_pose:
             current_pose_data = self.walker.get_camera_pose()
 
             # Ensure we have data and it's not the exact same millisecond as init
@@ -324,28 +324,34 @@ class WalkSequence(CyclingSequence):
                 # 1. Convert Data to Scipy Format (x, y, z, w)
                 # init_pose is CameraPoseData
                 q_init = [
-                    self.init_pose.orientation.x,
-                    self.init_pose.orientation.y,
-                    self.init_pose.orientation.z,
-                    self.init_pose.orientation.w,
+                    self.init_pose._pose.orientation.x,
+                    self.init_pose._pose.orientation.y,
+                    self.init_pose._pose.orientation.z,
+                    self.init_pose._pose.orientation.w,
                 ]
                 p_init = np.array(
                     [
-                        self.init_pose.position.x,
-                        self.init_pose.position.y,
-                        self.init_pose.position.z,
+                        self.init_pose._pose.position.x,
+                        self.init_pose._pose.position.y,
+                        self.init_pose._pose.position.z,
                     ]
                 )
 
                 # current_pose_data is CameraPoseData
                 curr = current_pose_data
                 q_curr = [
-                    curr.orientation.x,
-                    curr.orientation.y,
-                    curr.orientation.z,
-                    curr.orientation.w,
+                    curr._pose.orientation.x,
+                    curr._pose.orientation.y,
+                    curr._pose.orientation.z,
+                    curr._pose.orientation.w,
                 ]
-                p_curr = np.array([curr.position.x, curr.position.y, curr.position.z])
+                p_curr = np.array(
+                    [
+                        curr._pose.position.x, 
+                        curr._pose.position.y, 
+                        curr._pose.position.z
+                    ]
+                )
 
                 # 2. Create Rotation Objects
                 r_init = R.from_quat(q_init)

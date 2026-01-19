@@ -47,7 +47,6 @@ def main(args=None):
         walker = create_walker(
             period_ms=400
         )
-        walker.set_scale(7.9470454)
         node.walker = walker
         node.get_logger().info("Walker initialized successfully")
     except Exception as e:
