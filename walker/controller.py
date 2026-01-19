@@ -8,8 +8,6 @@ state transitions, and robot motion control.
 import time
 from typing import List, Optional
 
-from ros_api import CameraPoseClient, CameraPoseData
-
 from .gait import (
     BaseSequence,
     DefaultSequence,
@@ -27,7 +25,6 @@ class RobotWalker:
         client,
         grid_size: int = 12,
         period_ms: int = 200,
-        camera_pose_client: Optional[CameraPoseClient] = None,
     ):
         """
         Initialize robot walker controller.
@@ -37,13 +34,11 @@ class RobotWalker:
             client: Robot client (e.g., JointAngleTCPClient)
             grid_size: Grid search density for IK
             period_ms: Action period in milliseconds
-            camera_pose_client: Optional CameraPoseClient for accessing camera pose data
         """
         self.solver = solver
         self.client = client
         self.grid_size = grid_size
         self.period_ms = period_ms
-        self.camera_pose_client = camera_pose_client
 
         # State control
         self.current_phase = 0
@@ -54,9 +49,8 @@ class RobotWalker:
         self.start_time = time.time()
         self.running = False
 
-        # Start camera pose streaming if client is available
-        if self.camera_pose_client:
-            self.camera_pose_client.start_streaming()
+        # Camera pose state
+        self._camera_pose = None
 
     def reset(self):
         """Reset to initial state."""
@@ -191,19 +185,23 @@ class RobotWalker:
         """
         return time.time() - self.start_time
 
-    def get_camera_pose(self) -> Optional[CameraPoseData]:
+    def get_camera_pose(self) -> Optional[object]:
         """
-        Get the latest camera pose and timestamp since start.
+        Get the latest camera pose.
 
         Returns:
-            tuple: (pose_data, timestamp_seconds) where:
-                - pose_data: CameraPoseData object or None if not available
-                - timestamp_seconds: Time in seconds since the camera pose client started
+            The stored camera pose object or None if not available
         """
-        if not self.camera_pose_client:
-            return None
+        return self._camera_pose
 
-        return self.camera_pose_client.get_latest_pose()
+    def set_camera_pose(self, pose):
+        """
+        Store the camera pose.
+
+        Args:
+            pose: Camera pose object from ROS2 subscription
+        """
+        self._camera_pose = pose
 
     def set_scale(self, scale: float):
         """
@@ -212,5 +210,6 @@ class RobotWalker:
         Args:
             scale: Scale factor to set
         """
-        if self.camera_pose_client:
-            self.camera_pose_client.set_scale(scale)
+        # This method is kept for compatibility but doesn't need to do anything
+        # with the new architecture since scale was previously handled by camera_pose_client
+        pass

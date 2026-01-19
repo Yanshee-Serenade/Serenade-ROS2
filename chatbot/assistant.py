@@ -1,14 +1,17 @@
 """
-Voice assistant module for integrating ASR, LLM, and TTS.
+Voice assistant module for integrating ASR, LLM, and TTS with ROS2.
 
 This module provides the VoiceAssistant class which integrates
-speech recognition, LLM querying, and text-to-speech functionality.
+speech recognition, LLM querying, and text-to-speech functionality
+with ROS2 topic communication.
 """
 
 import asyncio
 
+import rclpy
+from std_msgs.msg import String
+
 from .asr import VoiceASR
-from .llm_client import LLMClient
 from .tts import StreamTTS
 
 
@@ -23,11 +26,36 @@ class VoiceAssistant:
             segment_tts: Whether to enable segmented TTS (sentence-based)
         """
         self.asr = VoiceASR()
-        self.llm = LLMClient()
         self.tts = StreamTTS()
         self.segment_tts = segment_tts
         self.is_running = False
         self.current_response = ""
+        
+        # ROS2 node and publishers/subscribers
+        self.node = None
+        self.question_publisher = None
+        self.answer_subscriber = None
+
+    def initialize_ros2(self, node):
+        """Initialize ROS2 node and publishers/subscribers"""
+        self.node = node
+        self.question_publisher = node.create_publisher(String, 'question', 10)
+        self.answer_subscriber = node.create_subscription(
+            String,
+            'answer',
+            self.on_answer,
+            10
+        )
+
+    def on_answer(self, msg: String):
+        """Handle incoming answers from VLM server via ROS2 topic"""
+        text_chunk = msg.data
+        if text_chunk:
+            self.current_response += text_chunk
+            print(f"🤖 AI: {text_chunk}", flush=True)
+
+            # 将响应添加到TTS队列
+            asyncio.create_task(self.tts.add_text(text_chunk, interrupt=False))
 
     def start(self):
         """启动语音助手"""
@@ -58,16 +86,8 @@ class VoiceAssistant:
         print("🤔 思考中...")
         self.current_response = ""
 
-        # 流式查询LLM
-        await self.llm.query_stream(
-            text, self._on_llm_response, segment_tts=self.segment_tts
-        )
-
-    def _on_llm_response(self, text_chunk: str):
-        """当收到LLM响应时的回调"""
-        if text_chunk:
-            self.current_response += text_chunk
-            print(f"🤖 AI: {text_chunk}", flush=True)
-
-            # 将响应添加到TTS队列
-            asyncio.create_task(self.tts.add_text(text_chunk, interrupt=False))
+        # 发布问题到ROS2主题
+        if self.question_publisher:
+            msg = String()
+            msg.data = text
+            self.question_publisher.publish(msg)
