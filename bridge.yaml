@@ -1,0 +1,23 @@
+topics:
+  # High-bandwidth Point Clouds (1 -> 2)
+  - topic: /orb_slam3/world_points
+    type: sensor_msgs/msg/PointCloud2
+    queue_size: 1
+  - topic: /orb_slam3/camera_points
+    type: sensor_msgs/msg/PointCloud2
+    queue_size: 1
+
+  # High-bandwidth Image (1 -> 2)
+  - topic: /camera/image_raw
+    type: sensor_msgs/msg/Image
+    queue_size: 1
+
+  # Camera Info (1 -> 2)
+  - topic: /camera/camera_info
+    type: sensor_msgs/msg/CameraInfo
+    queue_size: 1
+
+  # IMU Data (1 -> 2)
+  - topic: /imu/data
+    type: sensor_msgs/msg/Imu
+    queue_size: 1

@@ -19,7 +19,7 @@ from server import run_da3_server, run_sam3_server, run_vlm_server
 # ==========================================
 # CONFIGURATION
 # ==========================================
-ENABLE_VLM = False
+ENABLE_VLM = True
 ENABLE_DA3 = True
 ENABLE_SAM3 = True
 # ==========================================
