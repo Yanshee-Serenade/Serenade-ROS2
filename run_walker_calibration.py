@@ -1,7 +1,7 @@
 import time
 
-from ros_api import CameraPoseClient
-from walker import SquatSequence, create_walker
+from serenade_ros_api import CameraPoseClient
+from serenade_walker import SquatSequence, create_walker
 
 
 def calibrate_scale():

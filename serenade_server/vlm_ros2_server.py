@@ -24,7 +24,7 @@ from transformers import (
 )
 from threading import Thread
 
-from server.config import config
+from serenade_server.config import config
 
 
 class VLMServerNode(Node):

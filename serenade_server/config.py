@@ -7,7 +7,7 @@ including model paths, network settings, and generation parameters.
 
 from dataclasses import dataclass
 
-from ros_api import CameraIntrinsics, DistortionCoefficients
+from serenade_ros_api import CameraIntrinsics, DistortionCoefficients
 
 
 @dataclass

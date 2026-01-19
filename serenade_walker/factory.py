@@ -8,7 +8,7 @@ the creation of RobotWalker instances with proper initialization.
 from typing import Optional
 
 import rclpy
-from ros_api import JointAngleTCPClient
+from serenade_ros_api import JointAngleTCPClient
 
 from .controller import RobotWalker
 from .kinematics import KinematicsSolver

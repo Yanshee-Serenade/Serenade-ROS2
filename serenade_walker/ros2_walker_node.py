@@ -10,8 +10,8 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 
-from walker import create_walker, WalkSequence
-from walker.controller import RobotWalker
+from serenade_walker import create_walker, WalkSequence
+from serenade_walker.controller import RobotWalker
 
 
 class WalkerNode(Node):

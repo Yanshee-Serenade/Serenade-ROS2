@@ -3,7 +3,7 @@ import json
 import socket
 import threading
 
-from ros_api.model import CameraPoseData, Position
+from serenade_ros_api.model import CameraPoseData, Position
 
 
 class CameraPoseClient:

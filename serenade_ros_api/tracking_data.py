@@ -7,8 +7,8 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
-from ros_api.logger import setup_client_logger
-from ros_api.model import (
+from serenade_ros_api.logger import setup_client_logger
+from serenade_ros_api.model import (
     CameraPose,
     ImageInfo,
     Orientation,

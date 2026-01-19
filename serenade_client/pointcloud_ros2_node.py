@@ -16,7 +16,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2, CameraInfo
 from geometry_msgs.msg import TransformStamped
 
-from client.config import client_config
+from serenade_client.config import client_config
 
 REFERENCE_SCALE = 7.9470454
 
