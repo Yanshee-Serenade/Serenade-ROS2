@@ -2,8 +2,8 @@
 Client module for connecting to model servers.
 """
 
-from .config import client_config
+from .config import config
 
 __all__ = [
-    "client_config",
+    "config",
 ]

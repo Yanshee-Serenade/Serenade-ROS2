@@ -24,8 +24,6 @@ from transformers import (
 )
 from threading import Thread
 
-from serenade_server.config import config
-
 
 class VLMServerNode(Node):
     """ROS2 node for VLM inference"""
@@ -33,10 +31,29 @@ class VLMServerNode(Node):
     def __init__(self):
         super().__init__('vlm_server_node')
         
+        # Declare parameters
+        self.declare_parameter('image_topic', '/camera/image_slow')
+        self.declare_parameter('model_name', 'Qwen/Qwen3-VL-8B-Instruct')
+        self.declare_parameter('max_new_tokens', 256)
+        
+        # Get parameter values
+        self.image_topic = self.get_parameter('image_topic').value
+        self.model_name = self.get_parameter('model_name').value
+        self.max_new_tokens = self.get_parameter('max_new_tokens').value
+
+        assert self.image_topic is not None, "Image topic must be provided"
+        assert self.model_name is not None, "Model name must be provided"
+        assert self.max_new_tokens is not None, "Max new tokens must be provided"
+
         self.processor: Optional[Any] = None
         self.model_vlm: Optional[Any] = None
         self.cv_bridge = CvBridge()
         self.latest_image = None
+        
+        # 日志相关变量
+        self.generation_start_time = None
+        self.generation_first_token_time = None
+        self.total_tokens_generated = 0
         
         # Create subscriber and publisher
         self.question_subscription = self.create_subscription(
@@ -47,17 +64,17 @@ class VLMServerNode(Node):
         )
         self.image_subscription = self.create_subscription(
             Image,
-            '/camera/image_raw',
+            self.image_topic,
             self.on_image,
             1
         )
         self.answer_publisher = self.create_publisher(String, 'answer', 10)
         
         # Load model
-        self.load_model()
+        self.load_model(self.model_name)
         self.get_logger().info("VLM Server Node initialized")
 
-    def load_model(self, model_path: str = config.MODEL_VLM_DEFAULT):
+    def load_model(self, model_path: str):
         """Load VLM model."""
         self.get_logger().info(f"Loading VLM model from {model_path}...")
         try:
@@ -86,9 +103,11 @@ class VLMServerNode(Node):
     def on_image(self, msg: Image):
         """Handle incoming camera image"""
         try:
-            self.latest_image = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
+            # Store in BGR format directly for saving as JPG
+            self.latest_image = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         except Exception as e:
-            self.get_logger().error(f"Failed to convert image: {str(e)}")
+            print(f"Error processing image: {e}")
+            self.latest_image = None
 
     def on_question(self, msg: String):
         """Handle incoming questions from ROS2 topic"""
@@ -106,6 +125,11 @@ class VLMServerNode(Node):
 
     async def _process_question(self, question_text: str):
         """Process the question and stream the answer"""
+        # 重置日志变量
+        self.generation_start_time = time.time()
+        self.generation_first_token_time = None
+        self.total_tokens_generated = 0
+        
         try:
             # Build messages for the VLM
             content = []
@@ -169,7 +193,7 @@ class VLMServerNode(Node):
             generation_kwargs = {
                 **inputs,
                 "streamer": streamer,
-                "max_new_tokens": config.MAX_NEW_TOKENS,
+                "max_new_tokens": self.max_new_tokens,
                 "do_sample": True,
                 "num_beams": 1,
             }
@@ -181,11 +205,39 @@ class VLMServerNode(Node):
             generation_thread.start()
 
             # Stream response as text chunks via ROS2 topic
+            first_token_received = False
             for text in streamer:
                 if text:
+                    # 记录第一个token到达的时间
+                    if not first_token_received:
+                        self.generation_first_token_time = time.time()
+                        start_duration = self.generation_first_token_time - self.generation_start_time
+                        self.get_logger().info(f"⏱️ 启动时间: {start_duration:.2f}秒")
+                        first_token_received = True
+                    
+                    # 计算token数量（简单估算）
+                    token_count = len(text.split())
+                    self.total_tokens_generated += token_count
+                    
                     msg = String()
                     msg.data = text
                     self.answer_publisher.publish(msg)
+
+            # 生成完成后计算统计信息
+            generation_end_time = time.time()
+            total_duration = generation_end_time - self.generation_start_time
+            
+            # 计算有效生成时间（从第一个token开始）
+            if self.generation_first_token_time:
+                effective_duration = generation_end_time - self.generation_first_token_time
+                if effective_duration > 0 and self.total_tokens_generated > 0:
+                    tokens_per_second = self.total_tokens_generated / effective_duration
+                    self.get_logger().info(f"📊 生成统计: {self.total_tokens_generated} tokens, {total_duration:.2f}秒 (有效生成: {effective_duration:.2f}秒)")
+                    self.get_logger().info(f"🚀 Token速度: {tokens_per_second:.2f} tokens/秒")
+                else:
+                    self.get_logger().info(f"📊 生成统计: {total_duration:.2f}秒 (无有效token生成)")
+            else:
+                self.get_logger().info(f"📊 生成统计: {total_duration:.2f}秒 (未收到token)")
 
             self.get_logger().info("✅ VLM generation completed")
 

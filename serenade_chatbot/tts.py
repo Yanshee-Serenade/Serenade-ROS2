@@ -8,7 +8,7 @@ with streaming and interrupt support.
 import asyncio
 import time
 
-import YanAPI
+import serenade_chatbot.YanAPI as YanAPI
 
 
 class StreamTTS:

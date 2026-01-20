@@ -10,7 +10,7 @@ import threading
 import time
 from typing import Any, Callable, Coroutine, Optional
 
-import YanAPI
+import serenade_chatbot.YanAPI as YanAPI
 
 
 class VoiceASR:

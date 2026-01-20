@@ -41,16 +41,16 @@ class PointCloudValidator:
 
         if intrinsics is None:
             self.intrinsics = {
-                'fx': client_config.CAMERA_INTRINSICS_FX,
-                'fy': client_config.CAMERA_INTRINSICS_FY,
-                'cx': client_config.CAMERA_INTRINSICS_CX,
-                'cy': client_config.CAMERA_INTRINSICS_CY,
+                'fx': config.CAMERA_INTRINSICS_FX,
+                'fy': config.CAMERA_INTRINSICS_FY,
+                'cx': config.CAMERA_INTRINSICS_CX,
+                'cy': config.CAMERA_INTRINSICS_CY,
             }
         else:
             self.intrinsics = intrinsics
 
         if distortion_coeffs is None:
-            self.distortion_coeffs = client_config.DISTORTION_COEFFS
+            self.distortion_coeffs = config.DISTORTION_COEFFS
         else:
             self.distortion_coeffs = distortion_coeffs
 
