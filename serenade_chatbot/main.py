@@ -13,6 +13,7 @@ from rclpy.node import Node
 from std_msgs.msg import String
 
 from serenade_chatbot.assistant import VoiceAssistant
+from serenade_chatbot import YanAPI
 
 # 不启用分段 TTS，因为 TTS 分段延迟太大。在模型 8bit 量化的情况下，鸡煲输出的短一些延迟就会很低
 SEGMENT_TTS = False
@@ -33,6 +34,7 @@ async def main():
     """主函数 - 极简使用方式"""
     rclpy.init()
     
+    YanAPI.yan_api_init("raspberrypi")
     node = ChatbotNode()
     
     try:
@@ -41,7 +43,7 @@ async def main():
             rclpy.spin_once(node, timeout_sec=0.1)
             await asyncio.sleep(0.01)
     except KeyboardInterrupt:
-        print("\n👋 正在退出...")
+        print("\n👋 正在退出...", flush=True)
         node.assistant.stop()
     finally:
         node.destroy_node()

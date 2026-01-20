@@ -103,8 +103,7 @@ class VLMServerNode(Node):
     def on_image(self, msg: Image):
         """Handle incoming camera image"""
         try:
-            # Store in BGR format directly for saving as JPG
-            self.latest_image = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            self.latest_image = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
         except Exception as e:
             print(f"Error processing image: {e}")
             self.latest_image = None
