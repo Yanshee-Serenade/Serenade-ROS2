@@ -36,11 +36,6 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
   RENAME pointcloud_validator_node
 )
-install(PROGRAMS
-  serenade_node/image_bridge_node.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME image_bridge_node
-)
 
 install(DIRECTORY
   launch
