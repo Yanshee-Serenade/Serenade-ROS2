@@ -8,13 +8,14 @@ state transitions, and robot motion control.
 import time
 from typing import List, Optional
 from geometry_msgs.msg import PoseStamped
+from visualization_msgs.msg import MarkerArray
 
-from .gait import (
+from serenade_walker.gait import (
     BaseSequence,
     DefaultSequence,
     GaitStep,
 )
-from .kinematics import KinematicsSolver
+from serenade_walker.kinematics import KinematicsSolver
 
 
 class RobotWalker:
@@ -51,7 +52,8 @@ class RobotWalker:
         self.running = False
 
         # Camera pose state
-        self._camera_pose = None
+        self.camera_pose: Optional[PoseStamped] = None
+        self.marker_array: Optional[MarkerArray] = None
 
     def reset(self):
         """Reset to initial state."""
@@ -185,32 +187,3 @@ class RobotWalker:
             float: Time in seconds since the controller started
         """
         return time.time() - self.start_time
-
-    def get_camera_pose(self) -> Optional[PoseStamped]:
-        """
-        Get the latest camera pose.
-
-        Returns:
-            The stored camera pose object or None if not available
-        """
-        return self._camera_pose
-
-    def set_camera_pose(self, pose):
-        """
-        Store the camera pose.
-
-        Args:
-            pose: Camera pose object from ROS2 subscription
-        """
-        self._camera_pose = pose
-
-    def set_scale(self, scale: float):
-        """
-        Set the scale factor for the controller.
-
-        Args:
-            scale: Scale factor to set
-        """
-        # This method is kept for compatibility but doesn't need to do anything
-        # with the new architecture since scale was previously handled by camera_pose_client
-        pass

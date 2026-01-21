@@ -10,7 +10,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped
 
-from serenade_walker import create_walker, WalkSequence
+from serenade_walker import create_walker, WalkStraightSequence
 from serenade_walker.controller import RobotWalker
 
 
@@ -32,7 +32,7 @@ class WalkerNode(Node):
     def pose_callback(self, msg: PoseStamped):
         """Callback for camera pose updates"""
         if self.walker:
-            self.walker.set_camera_pose(msg)
+            self.walker.camera_pose = msg
 
 
 def main(args=None):
@@ -59,7 +59,7 @@ def main(args=None):
     # Run walking indefinitely
     try:
         node.get_logger().info("Starting infinite walking sequence...")
-        walk_sequence = WalkSequence(backward=False)
+        walk_sequence = WalkStraightSequence(backward=False)
         
         while rclpy.ok():
             # Run the walking sequence repeatedly

@@ -2,7 +2,6 @@
 ROS API interface for Yanshee robot.
 """
 
-from .camera_pose import CameraPoseClient
 from .joint_angle import JointAngleTCPClient
 from .logger import setup_client_logger
 from .model import (
@@ -20,8 +19,6 @@ from .ros_param import ROSParamClient
 from .tracking_data import TrackingDataClient
 
 __all__ = [
-    # camera_pose
-    "CameraPoseClient",
     # joint_angle
     "JointAngleTCPClient",
     # logger

@@ -1,26 +1,21 @@
 """
-Gait definitions and step generation.
+Gait sequences module.
 
-This module provides the WalkerState enum for different gait types,
-the GaitStep class for representing gait step data,
-and base classes for gait sequences.
+Provides various gait sequence implementations for robot walking, turning, squatting, etc.
 """
 
-# Re-export all gait-related classes for backward compatibility
 from serenade_walker.sequences.base_sequences import (
     BaseSequence,
     CyclingSequence,
-    GaitStep,
     OneShotSequence,
 )
-from serenade_walker.sequences.default_sequence import DefaultSequence
-from serenade_walker.sequences.squat_sequence import SquatSequence
 from serenade_walker.sequences.turn_left_sequence import TurnLeftSequence
 from serenade_walker.sequences.turn_right_sequence import TurnRightSequence
 from serenade_walker.sequences.walk_straight_sequence import WalkStraightSequence
+from serenade_walker.sequences.squat_sequence import SquatSequence
+from serenade_walker.sequences.default_sequence import DefaultSequence
 
 __all__ = [
-    "GaitStep",
     "BaseSequence",
     "CyclingSequence",
     "OneShotSequence",

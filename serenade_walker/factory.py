@@ -10,8 +10,8 @@ from typing import Optional
 import rclpy
 from serenade_ros_api import JointAngleTCPClient
 
-from .controller import RobotWalker
-from .kinematics import KinematicsSolver
+from serenade_walker.controller import RobotWalker
+from serenade_walker.kinematics import KinematicsSolver
 
 
 def create_walker(
@@ -57,7 +57,7 @@ def create_walker(
     print("\n2. Initializing robot client...")
 
     if use_mock:
-        from .mock_client import MockClient
+        from serenade_walker.mock_client import MockClient
 
         angle_client = MockClient()
         print("   ✓ Mock client initialized (simulation mode)")
