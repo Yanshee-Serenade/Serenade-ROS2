@@ -126,7 +126,7 @@ class BaseSequence(ABC):
         pass
 
     @abstractmethod
-    def get_step(self, step_index: int) -> Optional[GaitStep]:
+    def get_step(self, step_index: int) -> GaitStep:
         """
         Get gait step for the given step index.
 
@@ -142,7 +142,7 @@ class BaseSequence(ABC):
 class CyclingSequence(BaseSequence):
     """Base class for cycling sequences that never return None."""
 
-    def get_step(self, step_index: int) -> Optional[GaitStep]:
+    def get_step(self, step_index: int) -> GaitStep:
         """
         Get gait step for the given step index, cycling through steps.
 
@@ -153,7 +153,7 @@ class CyclingSequence(BaseSequence):
             GaitStep instance for the step (never returns None)
         """
         if not self.steps:
-            return None
+            return GaitStep((-0.02, 0.04, 0.0), (0.02, 0.04, 0.0))
 
         # Cycle through steps using modulo
         phase = step_index % len(self.steps)
@@ -163,7 +163,7 @@ class CyclingSequence(BaseSequence):
 class OneShotSequence(BaseSequence):
     """Base class for one-shot sequences that return None after completion."""
 
-    def get_step(self, step_index: int) -> Optional[GaitStep]:
+    def get_step(self, step_index: int) -> GaitStep:
         """
         Get gait step for the given step index, returns None after last step.
 
@@ -175,4 +175,4 @@ class OneShotSequence(BaseSequence):
         """
         if step_index < len(self.steps):
             return self.steps[step_index]
-        return None
+        return GaitStep((-0.02, 0.04, 0.0), (0.02, 0.04, 0.0))

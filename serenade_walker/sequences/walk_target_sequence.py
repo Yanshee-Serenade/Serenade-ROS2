@@ -1,14 +1,15 @@
 """
-Walk straight gait sequence.
+Walk target gait sequence.
 """
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from serenade_walker.sequences.base_sequences import CyclingSequence, GaitStep
+from visualization_msgs.msg import Marker
 
 
-class WalkStraightSequence(CyclingSequence):
+class WalkTargetSequence(CyclingSequence):
     """Walk gait sequence."""
 
     def __init__(self, backward=False):
@@ -60,6 +61,20 @@ class WalkStraightSequence(CyclingSequence):
         """
         step = super().get_step(step_index)
         right_spin = 0.0
+
+        target_position = np.zeros(3)
+        if self.walker.marker_array is not None:
+            for marker in self.walker.marker_array.markers:
+                marker: Marker = marker
+                if marker.action == Marker.ADD and marker.ns == "texts":
+                    # Only track teddy bear (Nailong)
+                    if "teddy" in marker.text:
+                        target_position[0] = marker.pose.position.x
+                        target_position[1] = marker.pose.position.y
+                        target_position[2] = marker.pose.position.z - 0.15
+
+        # Below code is legacy
+        # Change it to follow target_position (relative to camera frame)
 
         # Parameters (Tune these!)
         # K_yaw: How hard to correct for angle errors (Start small: 0.05 to 0.1)
