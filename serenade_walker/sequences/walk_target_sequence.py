@@ -14,6 +14,8 @@ class WalkTargetSequence(CyclingSequence):
 
     def __init__(self, backward=False):
         self.backward = backward
+        self.last_index = 0
+        self.last_has_target = False
         super().__init__()
 
     def _initialize_steps(self):
@@ -63,115 +65,57 @@ class WalkTargetSequence(CyclingSequence):
         right_spin = 0.0
 
         target_position = np.zeros(3)
+        has_target = False
         if self.walker.marker_array is not None:
             for marker in self.walker.marker_array.markers:
                 marker: Marker = marker
                 if marker.action == Marker.ADD and marker.ns == "texts":
-                    # Only track teddy bear (Nailong)
-                    if "teddy" in marker.text:
+                    if self.walker.target in marker.text:
+                        has_target = True
                         target_position[0] = marker.pose.position.x
                         target_position[1] = marker.pose.position.y
                         target_position[2] = marker.pose.position.z - 0.15
+                        print(f"Found nailong at target: f{target_position}", flush=True)
+                        break
 
-        # Below code is legacy
-        # Change it to follow target_position (relative to camera frame)
+        if has_target:
+            # Parameters (Tune these!)
+            MAX_CORRECTION = 0.005  # Meters
+            K = 4
+            right_spin = target_position[0] / target_position[2] * K * MAX_CORRECTION
+            right_spin = max(min(right_spin, MAX_CORRECTION), -MAX_CORRECTION)
+            print(f"Right spin = {right_spin}", flush=True)
 
-        # Parameters (Tune these!)
-        # K_yaw: How hard to correct for angle errors (Start small: 0.05 to 0.1)
-        # K_lat: How hard to correct for lateral drift (Start small: 0.1 to 0.3)
-        SCALE_FACTOR = 16  # Hard-coded scale factor for ORB-SLAM3
-        MAX_CORRECTION = 0.005  # Meters
-        K_yaw = 4 * MAX_CORRECTION
-        K_lat = 20 * MAX_CORRECTION
+            if not self.last_has_target:
+                print(f"Setting last_index = 0", flush=True)
+                self.last_index = 0
 
-        if self.init_pose:
-            current_pose_data = self.walker.camera_pose
+            # Calculate phase for offset logic (0-3 for walk sequence)
+            phase = (step_index - self.last_index) % 4
 
-            # Ensure we have data and it's not the exact same millisecond as init
-            if current_pose_data:
-                # 1. Convert Data to Scipy Format (x, y, z, w)
-                # init_pose is CameraPoseData
-                q_init = [
-                    self.init_pose._pose.orientation.x,
-                    self.init_pose._pose.orientation.y,
-                    self.init_pose._pose.orientation.z,
-                    self.init_pose._pose.orientation.w,
-                ]
-                p_init = np.array(
-                    [
-                        self.init_pose._pose.position.x,
-                        self.init_pose._pose.position.y,
-                        self.init_pose._pose.position.z,
-                    ]
+            # Set last has target
+            self.last_has_target = has_target
+
+            if self.backward ^ (phase == 0 or phase == 3):
+                # Reducing the addition to `y` increases the friction between robot left foot
+                # and ground, so that robot turns left
+                left_pos = (
+                    step.left_pos[0] + 0.0,
+                    step.left_pos[1] + 0.005 + min(right_spin, 0),
+                    step.left_pos[2] + 0.0,
                 )
-
-                # current_pose_data is CameraPoseData
-                curr = current_pose_data
-                q_curr = [
-                    curr._pose.orientation.x,
-                    curr._pose.orientation.y,
-                    curr._pose.orientation.z,
-                    curr._pose.orientation.w,
-                ]
-                p_curr = np.array(
-                    [
-                        curr._pose.position.x, 
-                        curr._pose.position.y, 
-                        curr._pose.position.z
-                    ]
+                new_step = GaitStep(left_pos, step.right_pos)
+                new_step.modifiers = step.modifiers.copy()
+                return new_step
+            else:
+                right_pos = (
+                    step.right_pos[0] + 0.0,
+                    step.right_pos[1] + 0.005 - max(right_spin, 0),
+                    step.right_pos[2] + 0.0,
                 )
+                new_step = GaitStep(step.left_pos, right_pos)
+                new_step.modifiers = step.modifiers.copy()
+                return new_step
 
-                # 2. Create Rotation Objects
-                r_init = R.from_quat(q_init)
-                r_curr = R.from_quat(q_curr)
-
-                # 3. Calculate Relative Transform (World -> Local Error)
-                # We want the current position/rotation relative to the Init frame
-                r_rel = r_init.inv() * r_curr
-                p_rel = r_init.inv().apply(p_curr - p_init)
-
-                # 4. Extract Errors
-                # Heading Error: Yaw angle (rotation around Y-axis)
-                # as_euler returns (x, y, z) ordering. index 1 is Y (yaw).
-                yaw_error = r_rel.as_euler("xyz", degrees=False)[1]
-
-                # Lateral Error: Displacement in X axis
-                lat_error = p_rel[0]
-
-                # 5. Calculate Control Output (PD Controller - P term only here)
-                # If yaw is positive (turned left), we need right_spin positive.
-                # If lat is positive (drifted left), we need right_spin positive.
-                # If backward is True, we invert the sign of yaw_error.
-                yaw_error = -yaw_error if self.backward else yaw_error
-                right_spin = (K_yaw * yaw_error) + (K_lat * lat_error)
-                right_spin *= SCALE_FACTOR
-
-                # Clip limits to prevent falling
-                right_spin = max(min(right_spin, MAX_CORRECTION), -MAX_CORRECTION)
-                print(
-                    f"Yaw Error: {yaw_error:.4f}, Lateral Error: {lat_error:.4f}, Right Spin: {right_spin:.4f}"
-                )
-
-        # Calculate phase for offset logic (0-3 for walk sequence)
-        phase = step_index % 4
-
-        if self.backward ^ (phase == 0 or phase == 3):
-            # Reducing the addition to `y` increases the friction between robot left foot
-            # and ground, so that robot turns left
-            left_pos = (
-                step.left_pos[0] + 0.0,
-                step.left_pos[1] + 0.005 + min(right_spin, 0),
-                step.left_pos[2] + 0.0,
-            )
-            new_step = GaitStep(left_pos, step.right_pos)
-            new_step.modifiers = step.modifiers.copy()
-            return new_step
-        else:
-            right_pos = (
-                step.right_pos[0] + 0.0,
-                step.right_pos[1] + 0.005 - max(right_spin, 0),
-                step.right_pos[2] + 0.0,
-            )
-            new_step = GaitStep(step.left_pos, right_pos)
-            new_step.modifiers = step.modifiers.copy()
-            return new_step
+        # If no target, return default step
+        return GaitStep((-0.02, 0.04, 0.0), (0.02, 0.04, 0.0))
