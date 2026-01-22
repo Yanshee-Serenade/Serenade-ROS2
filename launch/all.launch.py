@@ -16,10 +16,10 @@ def generate_launch_description():
         output='screen',
     )
     
-    vlm_server_node = Node(
+    agent_node = Node(
         package='serenade_ros2',
-        executable='vlm_server_node',
-        name='vlm_server_node',
+        executable='agent_node',
+        name='agent_node',
         output='screen',
     )
     
@@ -32,6 +32,6 @@ def generate_launch_description():
     
     return LaunchDescription([
         chatbot_node,
-        vlm_server_node,
+        agent_node,
         walker_node,
     ])

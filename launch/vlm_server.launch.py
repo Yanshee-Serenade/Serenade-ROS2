@@ -1,5 +1,5 @@
 """
-Launch file for the VLM server node
+Launch file for the VLM agent node
 """
 
 from launch import LaunchDescription
@@ -9,7 +9,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    """Generate launch description for VLM server node"""
+    """Generate launch description for VLM agent node"""
     
     # Declare launch arguments
     image_topic_arg = DeclareLaunchArgument(
@@ -30,16 +30,23 @@ def generate_launch_description():
         description='Maximum number of new tokens to generate'
     )
     
-    vlm_server_node = Node(
+    use_history_arg = DeclareLaunchArgument(
+        'use_history',
+        default_value='false',
+        description='Whether to load and use conversation history'
+    )
+    
+    agent_node = Node(
         package='serenade_ros2',
-        executable='vlm_server_node',
-        name='vlm_server_node',
+        executable='agent_node',
+        name='agent_node',
         output='screen',
         parameters=[
             {
                 'image_topic': LaunchConfiguration('image_topic'),
                 'model_name': LaunchConfiguration('model_name'),
                 'max_new_tokens': LaunchConfiguration('max_new_tokens'),
+                'use_history': LaunchConfiguration('use_history'),
             }
         ]
     )
@@ -48,5 +55,6 @@ def generate_launch_description():
         image_topic_arg,
         model_name_arg,
         max_new_tokens_arg,
-        vlm_server_node,
+        use_history_arg,
+        agent_node,
     ])
