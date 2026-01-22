@@ -16,7 +16,6 @@ from serenade_walker.kinematics import KinematicsSolver
 
 def create_walker(
     period_ms: int = 200,
-    lib_path: str = "./libyanshee_kinematics.so",
     host: str = "localhost",
     port: int = 21120,
     timeout: int = 10,
@@ -31,7 +30,8 @@ def create_walker(
 
     Args:
         period_ms: Action period in milliseconds
-        lib_path: Path to the native kinematics library
+        lib_path: Path to the native kinematics library. If None, will auto-detect
+                  from ROS2 package installation or current directory.
         host: Robot server hostname
         port: Robot server port
         timeout: Connection timeout in seconds
@@ -48,7 +48,7 @@ def create_walker(
     # 1. Initialize inverse kinematics solver
     print("1. Initializing inverse kinematics solver...")
     try:
-        solver = KinematicsSolver(lib_path)
+        solver = KinematicsSolver()
         print("   ✓ Inverse kinematics solver initialized successfully")
     except Exception as e:
         raise RuntimeError(f"Failed to initialize kinematics solver: {e}")
