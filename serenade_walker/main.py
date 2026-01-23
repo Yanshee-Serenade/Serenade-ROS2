@@ -59,6 +59,9 @@ class WalkerNode(Node):
             qos_profile
         )
 
+        # Publisher for target lost questions
+        self.question_publisher = self.create_publisher(String, '/question', 10)
+
     def pose_callback(self, msg: PoseStamped):
         if self.walker:
             self.walker.camera_pose = msg
@@ -84,7 +87,8 @@ def main(args=None):
     # Initialize walker
     try:
         walker = create_walker(
-            period_ms=400
+            period_ms=400,
+            node=node
         )
         node.walker = walker
         node.get_logger().info("Walker initialized successfully")

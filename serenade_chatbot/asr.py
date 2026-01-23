@@ -69,7 +69,7 @@ class VoiceASR:
                 time.sleep(0.1)
 
             except Exception as e:
-                print(f"ASR监控错误: {e}")
+                print(f"ASR监控错误: {e}", flush=True)
                 self.is_running = False
                 break
 
@@ -77,3 +77,4 @@ class VoiceASR:
         """停止语音识别"""
         self.is_running = False
         YanAPI.stop_voice_asr()
+        print("ASR已停止", flush=True)

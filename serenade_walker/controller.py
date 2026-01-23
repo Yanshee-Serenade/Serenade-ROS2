@@ -10,6 +10,7 @@ from typing import List, Optional
 from geometry_msgs.msg import PoseStamped
 from visualization_msgs.msg import MarkerArray
 
+from serenade_agent.config import TARGET_NONE
 from serenade_walker.gait import (
     BaseSequence,
     DefaultSequence,
@@ -27,6 +28,7 @@ class RobotWalker:
         client,
         grid_size: int = 12,
         period_ms: int = 200,
+        node = None,
     ):
         """
         Initialize robot walker controller.
@@ -36,11 +38,13 @@ class RobotWalker:
             client: Robot client (e.g., JointAngleTCPClient)
             grid_size: Grid search density for IK
             period_ms: Action period in milliseconds
+            node: ROS2 node reference for publishing messages
         """
         self.solver = solver
         self.client = client
         self.grid_size = grid_size
         self.period_ms = period_ms
+        self.node = node
 
         # State control
         self.current_phase = 0
@@ -54,7 +58,7 @@ class RobotWalker:
         # Camera pose state
         self.camera_pose: Optional[PoseStamped] = None
         self.marker_array: Optional[MarkerArray] = None
-        self.target: str = "None"
+        self.target: str = TARGET_NONE
 
     def reset(self):
         """Reset to initial state."""

@@ -5,9 +5,10 @@ Handles question processing, VLM inference, and command publishing.
 """
 
 import asyncio
+import queue
 import time
 from datetime import datetime
-from threading import Thread
+from threading import Thread, Event
 from typing import Optional
 
 import cv2
@@ -18,10 +19,35 @@ from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
+from serenade_agent.config import INTERRUPTIBLE_FLAG
 from serenade_agent.vlm_operations import VLMOperations
 from serenade_agent.message_builder import MessageBuilder
 from serenade_agent.response_parser import ResponseParser
 
+
+class InterruptedError(Exception):
+    """Exception raised when the generation process is interrupted."""
+    pass
+
+class InterruptibleStreamer:
+    """
+    Wrapper around the VLM streamer to check for interruption signals
+    during the iteration of generated tokens.
+    """
+    def __init__(self, streamer, interrupt_event: Event):
+        self.streamer = streamer
+        self.interrupt_event = interrupt_event
+        self.iterator = None
+
+    def __iter__(self):
+        self.iterator = iter(self.streamer)
+        return self
+
+    def __next__(self):
+        # Check for interruption before retrieving the next token
+        if self.interrupt_event.is_set():
+            raise InterruptedError("Generation interrupted by new incoming question")
+        return next(self.iterator)
 
 class AgentNode(Node):
     """ROS2 node for VLM agent with conversation history management."""
@@ -30,7 +56,7 @@ class AgentNode(Node):
         super().__init__('agent_node')
 
         # Declare parameters
-        self.declare_parameter('image_topic', '/camera/image_slow')
+        self.declare_parameter('image_topic', '/camera/image_raw')
         self.declare_parameter('model_name', 'Qwen/Qwen3-VL-8B-Instruct')
         self.declare_parameter('max_new_tokens', 256)
         self.declare_parameter('use_history', False)
@@ -54,6 +80,20 @@ class AgentNode(Node):
         self.vlm_ops = VLMOperations(self.model_name, self.max_new_tokens)
         self.message_builder = MessageBuilder(use_history=self.use_history)
 
+        # Load model
+        self.load_model()
+
+        # Initialize question queue and worker thread
+        self.question_queue: queue.Queue = queue.Queue()
+        self.worker_running = True
+        
+        # Interruption control
+        self.interrupt_event = Event()
+        self.processing_interruptible = False
+
+        self.worker_thread = Thread(target=self._question_worker, daemon=True)
+        self.worker_thread.start()
+
         # Create subscribers and publishers first
         self.question_subscription = self.create_subscription(
             String,
@@ -67,6 +107,7 @@ class AgentNode(Node):
             self.on_image,
             1
         )
+        self.question_publisher = self.create_publisher(String, 'question', 10)
         self.answer_publisher = self.create_publisher(String, 'answer', 10)
         self.target_publisher = self.create_publisher(String, 'target', 10)
 
@@ -83,11 +124,10 @@ class AgentNode(Node):
         self.generation_first_token_time: Optional[float] = None
         self.total_tokens_generated = 0
 
-        # Load model
-        self.load_model(self.model_name)
+        # Node initialized
         self.get_logger().info("VLM Agent Node initialized")
 
-    def load_model(self, model_path: str):
+    def load_model(self):
         """Load VLM model."""
         try:
             self.vlm_ops.load_model(logger=self.get_logger())
@@ -104,17 +144,23 @@ class AgentNode(Node):
             self.latest_image = None
 
     def on_question(self, msg: String):
-        """Handle incoming questions from ROS2 topic."""
+        """Handle incoming questions from ROS2 topic by queueing them."""
         question_text = msg.data
-        self.get_logger().info(f"Received question: {question_text}")
+        is_interruptible = question_text.startswith(INTERRUPTIBLE_FLAG)
+        
+        if self.processing_interruptible:
+            if is_interruptible:
+                # If both interruptible, the latter is discarded
+                self.get_logger().info(f"Ignoring question: {question_text}")
+                return
+            else:
+                # If new question is not interruptible, interrupt the former
+                self.get_logger().info("Interrupting current question for new incoming request.")
+                self.interrupt_event.set()
 
-        # Process question asynchronously to avoid blocking the main thread
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self._process_question(question_text))
-        except Exception as e:
-            self.get_logger().error(f"Error processing question: {str(e)}")
+        self.get_logger().info(f"Received question: {question_text}")
+        # Add question to queue for sequential processing
+        self.question_queue.put(question_text)
 
     async def _process_question(self, question_text: str):
         """Process the question and stream the answer."""
@@ -122,6 +168,16 @@ class AgentNode(Node):
         self.generation_start_time = time.time()
         self.generation_first_token_time = None
         self.total_tokens_generated = 0
+
+        # Check for interruptible flag
+        is_interruptible = question_text.startswith(INTERRUPTIBLE_FLAG)
+        if is_interruptible:
+            # Remove flag
+            question_text = question_text[len(INTERRUPTIBLE_FLAG):]
+            self.processing_interruptible = True
+            self.interrupt_event.clear()
+        else:
+            self.processing_interruptible = False
 
         try:
             # Save image if available
@@ -142,22 +198,34 @@ class AgentNode(Node):
 
             # Setup streamer
             streamer = self.vlm_ops.get_streamer()
+            
+            # If interruptible, wrap the streamer to catch the interrupt event
+            # during the parsing loop
+            if is_interruptible:
+                streamer_to_use = InterruptibleStreamer(streamer, self.interrupt_event)
+            else:
+                streamer_to_use = streamer
+
             generation_kwargs = self.vlm_ops.get_generation_kwargs(inputs, streamer)
 
             # Start generation thread
             generation_thread = Thread(target=lambda: model.generate(**generation_kwargs))
             generation_thread.start()
 
-            # Parse streamed response - the parser handles publishing and logging
-            self.response_parser.parse_streamed_response(streamer)
+            # Parse streamed response
+            # If interrupted, InterruptedError will be raised from inside this call (via iterator)
+            self.response_parser.parse_streamed_response(streamer_to_use)
+
+            # If parse_streamed_response ends, we disable interruption to ensure 
+            # we finish saving the history and don't interrupt the cleanup/saving phase.
+            self.processing_interruptible = False
 
             # Get the parsed results for history saving
-            think_content = self.response_parser.get_think()
             say_content = self.response_parser.get_say()
             setstate_line = self.response_parser.get_setstate()
 
             # Add assistant response to history (save the full streamed output)
-            full_response = f"think {think_content}\nsay {say_content}\n{setstate_line}"
+            full_response = f"say {say_content}\n{setstate_line}"
             self.message_builder.add_assistant_message(full_response)
 
             # Save history with timestamp
@@ -167,7 +235,6 @@ class AgentNode(Node):
             # Log metrics
             generation_end_time = time.time()
             total_duration = generation_end_time - self.generation_start_time
-
             if self.generation_first_token_time:
                 effective_duration = generation_end_time - self.generation_first_token_time
                 self.get_logger().info(
@@ -176,8 +243,16 @@ class AgentNode(Node):
                 )
             else:
                 self.get_logger().info(f"📊 Generated in {total_duration:.2f}s")
-
             self.get_logger().info("✅ VLM generation completed")
+
+        except InterruptedError:
+            self.get_logger().warn("⚠️ Question processing interrupted by new request.")
+            # Remove the just-added user message so it doesn't pollute history
+            if hasattr(self.message_builder, 'messages') and isinstance(self.message_builder.messages, list):
+                if self.message_builder.messages:
+                    self.message_builder.messages.pop()
+            # Do NOT add assistant message or save history
+            return
 
         except Exception as e:
             self.get_logger().error(f"VLM error: {str(e)}")
@@ -185,12 +260,39 @@ class AgentNode(Node):
             error_msg = String()
             error_msg.data = f"VLM error: {str(e)}"
             self.answer_publisher.publish(error_msg)
+            
+        finally:
+            # Always ensure interruptible state is reset
+            self.processing_interruptible = False
 
+    def _question_worker(self):
+        """Worker thread that processes questions sequentially from the queue."""
+        while self.worker_running:
+            try:
+                # Get question from queue with timeout to allow graceful shutdown
+                question_text = self.question_queue.get(timeout=2.0)
+                
+                # Process question in async event loop
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self._process_question(question_text))
+                finally:
+                    loop.close()
+                    
+                self.question_queue.task_done()
+            except queue.Empty:
+                # Publish a interruptible question for self-reasoning
+                msg = String()
+                msg.data = f"{INTERRUPTIBLE_FLAG}请简要概括现在的情况，并决定下一步行动"
+                self.question_publisher.publish(msg)
+                continue
+            except Exception as e:
+                self.get_logger().error(f"Error in question worker: {str(e)}")
 
 def main(args=None):
     """Main function to run VLM agent ROS2 node."""
     rclpy.init(args=args)
-
     agent_node = AgentNode()
 
     try:
@@ -198,9 +300,12 @@ def main(args=None):
     except KeyboardInterrupt:
         agent_node.get_logger().info("Shutting down VLM Agent...")
     finally:
+        # Stop the worker thread gracefully
+        agent_node.worker_running = False
+        agent_node.worker_thread.join(timeout=5.0)
+        
         agent_node.destroy_node()
         rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()

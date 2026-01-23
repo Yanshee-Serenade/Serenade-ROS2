@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
 Response parser for VLM streamed output.
-Parses think, say, and setstate commands from streamed output.
+Parses say and setstate commands from streamed output.
 Non-strict parsing to handle noise and partial responses.
 Publishes to ROS2 topics as commands are detected.
 """
 
 import re
+from serenade_agent.config import TARGET_LEFT, TARGET_RIGHT, TARGET_NONE
 from typing import Any, Optional
 
 
@@ -29,10 +30,8 @@ class ResponseParser:
         self.message_builder = message_builder
         
         self.buffer = ""
-        self.think_content = ""
         self.say_content = ""
         self.setstate_line = ""
-        self.has_think = False
         self.has_say = False
         self.has_setstate = False
 
@@ -73,16 +72,6 @@ class ResponseParser:
         line = line.strip()
         if not line:
             return
-
-        # Parse "think" command
-        if "think" in line.lower():
-            # Extract content after "think"
-            # Non-strict: just find where "think" appears and take everything after
-            match = re.search(r'think\s+(.+)', line, re.IGNORECASE)
-            if match:
-                self.think_content = match.group(1).strip()
-                self.has_think = True
-                self.logger.info(f"🧠 Think: {self.think_content}")
 
         # Parse "say" command
         elif "say" in line.lower():
@@ -127,7 +116,7 @@ class ResponseParser:
 
         if action == "idle":
             target_msg = String()
-            target_msg.data = "None"
+            target_msg.data = TARGET_NONE
             self.target_publisher.publish(target_msg)
         elif action == "walk" or action == "hi":
             target_id = self.extract_target_id(setstate_line)
@@ -135,10 +124,16 @@ class ResponseParser:
                 target_msg = String()
                 target_msg.data = target_id
                 self.target_publisher.publish(target_msg)
-
-    def get_think(self) -> str:
-        """Get accumulated think content."""
-        return self.think_content
+        elif action == "turn":
+            target_id = self.extract_target_id(setstate_line)
+            if target_id and target_id.lower() == "left":
+                target_msg = String()
+                target_msg.data = TARGET_LEFT
+                self.target_publisher.publish(target_msg)
+            if target_id and target_id.lower() == "right":
+                target_msg = String()
+                target_msg.data = TARGET_RIGHT
+                self.target_publisher.publish(target_msg)
 
     def get_say(self) -> str:
         """Get accumulated say content."""
@@ -149,8 +144,8 @@ class ResponseParser:
         return self.setstate_line
 
     def has_all_commands(self) -> bool:
-        """Check if all three commands (think, say, setstate) have been received."""
-        return self.has_think and self.has_say and self.has_setstate
+        """Check if all three commands (say, setstate) have been received."""
+        return self.has_say and self.has_setstate
 
     @staticmethod
     def extract_target_id(setstate_line: str) -> Optional[str]:

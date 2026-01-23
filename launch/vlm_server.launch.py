@@ -14,7 +14,7 @@ def generate_launch_description():
     # Declare launch arguments
     image_topic_arg = DeclareLaunchArgument(
         'image_topic',
-        default_value='/camera/image_slow',
+        default_value='/camera/image_raw',
         description='The image topic to subscribe to'
     )
     

@@ -20,6 +20,7 @@ def create_walker(
     port: int = 21120,
     timeout: int = 10,
     use_mock: bool = False,
+    node = None,
 ) -> RobotWalker:
     """
     Create and initialize a RobotWalker instance.
@@ -36,6 +37,7 @@ def create_walker(
         port: Robot server port
         timeout: Connection timeout in seconds
         use_mock: Whether to use a mock client for testing
+        node: ROS2 node reference for publishing messages
 
     Returns:
         Initialized RobotWalker instance
@@ -73,6 +75,7 @@ def create_walker(
             client=angle_client,
             grid_size=12,
             period_ms=period_ms,
+            node=node,
         )
         print(f"   ✓ Walker created successfully, period: {walker.period_ms}ms")
     except Exception as e:
