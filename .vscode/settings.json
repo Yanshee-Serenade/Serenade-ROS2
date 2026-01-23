@@ -11,25 +11,5 @@
         "/opt/custom_msgs/control_msgs_ros2/install/control_msgs/local/lib/python3.10/dist-packages",
         "/opt/ros/humble/lib/python3.10/site-packages",
         "/opt/ros/humble/local/lib/python3.10/dist-packages"
-    ],
-    "workbench.colorCustomizations": {
-        "activityBar.activeBackground": "#006327",
-        "activityBar.background": "#006327",
-        "activityBar.foreground": "#e7e7e7",
-        "activityBar.inactiveForeground": "#e7e7e799",
-        "activityBarBadge.background": "#260060",
-        "activityBarBadge.foreground": "#e7e7e7",
-        "commandCenter.border": "#e7e7e799",
-        "sash.hoverBorder": "#006327",
-        "statusBar.background": "#003013",
-        "statusBar.foreground": "#e7e7e7",
-        "statusBarItem.hoverBackground": "#006327",
-        "statusBarItem.remoteBackground": "#003013",
-        "statusBarItem.remoteForeground": "#e7e7e7",
-        "titleBar.activeBackground": "#003013",
-        "titleBar.activeForeground": "#e7e7e7",
-        "titleBar.inactiveBackground": "#00301399",
-        "titleBar.inactiveForeground": "#e7e7e799"
-    },
-    "peacock.remoteColor": "#003013"
+    ]
 }
