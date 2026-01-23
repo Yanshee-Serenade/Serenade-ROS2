@@ -68,6 +68,7 @@ class WalkerNode(Node):
             self.walker.marker_array = msg
     
     def target_callback(self, msg: String):
+        self.get_logger().info(f"Target changed to {msg.data}")
         if self.walker:
             self.walker.target = msg.data
 

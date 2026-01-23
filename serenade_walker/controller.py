@@ -54,7 +54,7 @@ class RobotWalker:
         # Camera pose state
         self.camera_pose: Optional[PoseStamped] = None
         self.marker_array: Optional[MarkerArray] = None
-        self.target: str = ""
+        self.target: str = "None"
 
     def reset(self):
         """Reset to initial state."""

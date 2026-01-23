@@ -70,13 +70,19 @@ class WalkTargetSequence(CyclingSequence):
             for marker in self.walker.marker_array.markers:
                 marker: Marker = marker
                 if marker.action == Marker.ADD and marker.ns == "texts":
-                    if self.walker.target in marker.text:
+                    target_text = self.walker.target.strip()
+                    marker_text = marker.text.split('_')[1].split('\n')[0].strip()
+                    print(f"{target_text} VS {marker_text}", flush=True)
+                    if target_text in marker_text:
                         has_target = True
                         target_position[0] = marker.pose.position.x
                         target_position[1] = marker.pose.position.y
                         target_position[2] = marker.pose.position.z - 0.15
-                        print(f"Found nailong at target: f{target_position}", flush=True)
                         break
+        
+        if not self.last_has_target:
+            self.last_index = 0
+        self.last_has_target = has_target
 
         if has_target:
             # Parameters (Tune these!)
@@ -86,15 +92,8 @@ class WalkTargetSequence(CyclingSequence):
             right_spin = max(min(right_spin, MAX_CORRECTION), -MAX_CORRECTION)
             print(f"Right spin = {right_spin}", flush=True)
 
-            if not self.last_has_target:
-                print(f"Setting last_index = 0", flush=True)
-                self.last_index = 0
-
             # Calculate phase for offset logic (0-3 for walk sequence)
             phase = (step_index - self.last_index) % 4
-
-            # Set last has target
-            self.last_has_target = has_target
 
             if self.backward ^ (phase == 0 or phase == 3):
                 # Reducing the addition to `y` increases the friction between robot left foot
