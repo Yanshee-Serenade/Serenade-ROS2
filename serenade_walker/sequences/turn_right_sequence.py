@@ -26,8 +26,6 @@ class TurnRightSequence(CyclingSequence):
             GaitStep instance for the step with offset applied
         """
         step = super().get_step(step_index)
-        if step is None:
-            return None
 
         # Add Y-axis offset to right foot for turn right
         right_pos = (
@@ -35,6 +33,6 @@ class TurnRightSequence(CyclingSequence):
             step.right_pos[1] + 0.004,
             step.right_pos[2] + 0.0,
         )
-        new_step = GaitStep(step.left_pos, right_pos)
-        new_step.modifiers = step.modifiers.copy()
+        new_step = step.copy()
+        new_step.right_pos = right_pos
         return new_step

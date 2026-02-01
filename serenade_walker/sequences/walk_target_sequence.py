@@ -183,8 +183,8 @@ class WalkTargetSequence(BaseSequence):
                     step.left_pos[1] + 0.005 + min(right_spin, 0),
                     step.left_pos[2] + 0.0,
                 )
-                new_step = GaitStep(left_pos, step.right_pos)
-                new_step.modifiers = step.modifiers.copy()
+                new_step = step.copy()
+                new_step.left_pos = left_pos
                 return new_step
             else:
                 right_pos = (
@@ -192,9 +192,9 @@ class WalkTargetSequence(BaseSequence):
                     step.right_pos[1] + 0.005 - max(right_spin, 0),
                     step.right_pos[2] + 0.0,
                 )
-                new_step = GaitStep(step.left_pos, right_pos)
-                new_step.modifiers = step.modifiers.copy()
+                new_step = step.copy()
+                new_step.right_pos = right_pos
                 return new_step
 
         # If no target, return default step
-        return GaitStep((-0.02, 0.04, 0.0), (0.02, 0.04, 0.0))
+        return GaitStep()

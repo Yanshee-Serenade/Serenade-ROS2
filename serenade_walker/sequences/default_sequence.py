@@ -11,5 +11,5 @@ class DefaultSequence(OneShotSequence):
     def _initialize_steps(self):
         """Initialize default steps."""
         self.steps = [
-            GaitStep((-0.02, 0.04, 0.0), (0.02, 0.04, 0.0)),
+            GaitStep(),
         ]

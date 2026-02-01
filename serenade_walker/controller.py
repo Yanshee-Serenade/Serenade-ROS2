@@ -92,6 +92,19 @@ class RobotWalker:
             step.right_pos[1],
         )  # (x, z, y)
 
+        # Coordinate conversion for arm positions: swap y and z for IK solver
+        left_arm_converted = (
+            step.left_arm[0],
+            step.left_arm[2],
+            step.left_arm[1],
+        )  # (x, z, y)
+
+        right_arm_converted = (
+            step.right_arm[0],
+            step.right_arm[2],
+            step.right_arm[1],
+        )  # (x, z, y)
+
         # Solve left leg inverse kinematics
         left_result = self.solver.solve_leg_ik(
             False, left_pos_converted, self.grid_size
@@ -110,13 +123,30 @@ class RobotWalker:
             for i in range(5):
                 joint_angles[6 + i] = right_angles[i]  # Right leg indices 6-10
 
-        # Set default arm angles
-        joint_angles[0] = 90.0  # Right shoulder yaw
-        joint_angles[1] = 165.0  # Right shoulder pitch
-        joint_angles[2] = 100.0  # Right elbow
-        joint_angles[3] = 90.0  # Left shoulder yaw
-        joint_angles[4] = 15.0  # Left shoulder pitch
-        joint_angles[5] = 80.0  # Left elbow
+        # Solve arm inverse kinematics
+        # Right arm: indices 0-2 (shoulder yaw, shoulder pitch, elbow)
+        right_arm_result = self.solver.solve_arm_ik(True, right_arm_converted)
+        if right_arm_result:
+            right_arm_angles, _ = right_arm_result
+            for i in range(3):
+                joint_angles[i] = right_arm_angles[i]  # Right arm indices 0-2
+        else:
+            # Fallback to default arm angles
+            joint_angles[0] = 90.0  # Right shoulder yaw
+            joint_angles[1] = 165.0  # Right shoulder pitch
+            joint_angles[2] = 100.0  # Right elbow
+
+        # Left arm: indices 3-5 (shoulder yaw, shoulder pitch, elbow)
+        left_arm_result = self.solver.solve_arm_ik(False, left_arm_converted)
+        if left_arm_result:
+            left_arm_angles, _ = left_arm_result
+            for i in range(3):
+                joint_angles[3 + i] = left_arm_angles[i]  # Left arm indices 3-5
+        else:
+            # Fallback to default arm angles
+            joint_angles[3] = 90.0  # Left shoulder yaw
+            joint_angles[4] = 15.0  # Left shoulder pitch
+            joint_angles[5] = 80.0  # Left elbow
 
         # Set default neck angle
         joint_angles[16] = 90.0

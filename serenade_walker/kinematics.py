@@ -29,7 +29,7 @@ class KinematicsSolver:
         except Exception as e:
             raise RuntimeError(f"Failed to load kinematics library {lib_path}: {e}")
 
-        # Set function prototypes
+        # Set function prototypes for leg kinematics
         self.lib.inverse_kinematics.argtypes = [
             ctypes.c_int,  # is_right_leg
             ctypes.c_double,  # target_x
@@ -40,6 +40,17 @@ class KinematicsSolver:
             ctypes.POINTER(ctypes.c_double),  # error
         ]
         self.lib.inverse_kinematics.restype = ctypes.c_int
+
+        # Set function prototypes for arm kinematics
+        self.lib.arm_inverse_kinematics.argtypes = [
+            ctypes.c_int,  # is_right_arm
+            ctypes.c_double,  # target_x
+            ctypes.c_double,  # target_y
+            ctypes.c_double,  # target_z
+            ctypes.POINTER(ctypes.c_double),  # angles array
+            ctypes.POINTER(ctypes.c_double),  # error
+        ]
+        self.lib.arm_inverse_kinematics.restype = ctypes.c_int
 
     @staticmethod
     def _find_library() -> str:
@@ -109,6 +120,44 @@ class KinematicsSolver:
         if result == 1:
             angles_degrees = [
                 round(math.degrees(float(angles[i])), 0) for i in range(5)
+            ]
+            return angles_degrees, float(error.value)
+        else:
+            return None
+    
+    def solve_arm_ik(
+        self,
+        is_right_arm: bool,
+        target_pos: Tuple[float, float, float],
+    ) -> Optional[Tuple[List[float], float]]:
+        """
+        Solve inverse kinematics for a single arm.
+
+        Args:
+            is_right_arm: True for right arm, False for left arm
+            target_pos: Target position as (x, y, z) tuple
+
+        Returns:
+            Tuple of (angles in degrees, error) if successful, None otherwise
+        """
+        angles = (ctypes.c_double * 3)()
+        error = ctypes.c_double()
+
+        x, y, z = target_pos
+
+        result = self.lib.arm_inverse_kinematics(
+            ctypes.c_int(1 if is_right_arm else 0),
+            ctypes.c_double(x),
+            ctypes.c_double(y),
+            ctypes.c_double(z),
+            angles,
+            ctypes.byref(error),
+        )
+        print(f"Error: {float(error.value)}, Valid: {result}", flush=True)
+
+        if result == 1:
+            angles_degrees = [
+                round(math.degrees(float(angles[i])), 0) for i in range(3)
             ]
             return angles_degrees, float(error.value)
         else:

@@ -4,6 +4,7 @@ Base sequence classes for gait definitions.
 Provides the GaitStep class and base classes for cycling and one-shot sequences.
 """
 
+import copy
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
@@ -16,8 +17,10 @@ class GaitStep:
 
     def __init__(
         self,
-        left_pos: Tuple[float, float, float],
-        right_pos: Tuple[float, float, float],
+        left_pos = (-0.02, 0.04, 0.0),
+        right_pos = (0.02, 0.04, 0.0),
+        left_arm = (-0.1, 0.17, 0.01),
+        right_arm = (0.1, 0.17, 0.01),
     ):
         """
         Initialize a gait step with target foot positions.
@@ -28,8 +31,13 @@ class GaitStep:
         """
         self.left_pos = left_pos
         self.right_pos = right_pos
+        self.left_arm = left_arm
+        self.right_arm = right_arm
         self.modifiers: Dict[str, float] = {}
-        self.offset: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+    
+    def copy(self) -> "GaitStep":
+        """Convenience method to create a deep copy."""
+        return copy.deepcopy(self)
 
     def set_right_arm(self, angle: float) -> "GaitStep":
         """Set right arm forward lift angle."""
@@ -65,44 +73,6 @@ class GaitStep:
         """Set neck rotation angle (right rotation)."""
         self.modifiers["neck"] = angle
         return self
-
-    def __add__(self, other: "GaitStep") -> "GaitStep":
-        """
-        Add two GaitStep objects together.
-
-        Args:
-            other: Another GaitStep to add to this one
-
-        Returns:
-            New GaitStep with combined positions, modifiers, and offsets
-        """
-        # Add positions
-        new_left_pos = (
-            self.left_pos[0] + other.left_pos[0],
-            self.left_pos[1] + other.left_pos[1],
-            self.left_pos[2] + other.left_pos[2],
-        )
-        new_right_pos = (
-            self.right_pos[0] + other.right_pos[0],
-            self.right_pos[1] + other.right_pos[1],
-            self.right_pos[2] + other.right_pos[2],
-        )
-
-        # Create new GaitStep
-        new_step = GaitStep(new_left_pos, new_right_pos)
-
-        # Merge modifiers (other takes precedence)
-        new_step.modifiers = self.modifiers.copy()
-        new_step.modifiers.update(other.modifiers)
-
-        # Add offsets
-        new_step.offset = (
-            self.offset[0] + other.offset[0],
-            self.offset[1] + other.offset[1],
-            self.offset[2] + other.offset[2],
-        )
-
-        return new_step
 
 
 class BaseSequence(ABC):
@@ -153,7 +123,7 @@ class CyclingSequence(BaseSequence):
             GaitStep instance for the step (never returns None)
         """
         if not self.steps:
-            return GaitStep((-0.02, 0.04, 0.0), (0.02, 0.04, 0.0))
+            return GaitStep()
 
         # Cycle through steps using modulo
         phase = step_index % len(self.steps)
@@ -175,4 +145,4 @@ class OneShotSequence(BaseSequence):
         """
         if step_index < len(self.steps):
             return self.steps[step_index]
-        return GaitStep((-0.02, 0.04, 0.0), (0.02, 0.04, 0.0))
+        return GaitStep()

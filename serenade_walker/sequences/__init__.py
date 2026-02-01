@@ -14,6 +14,7 @@ from serenade_walker.sequences.turn_right_sequence import TurnRightSequence
 from serenade_walker.sequences.walk_straight_sequence import WalkStraightSequence
 from serenade_walker.sequences.walk_target_sequence import WalkTargetSequence
 from serenade_walker.sequences.squat_sequence import SquatSequence
+from serenade_walker.sequences.hand_sequence import HandSequence
 from serenade_walker.sequences.default_sequence import DefaultSequence
 
 __all__ = [
@@ -25,5 +26,6 @@ __all__ = [
     "WalkStraightSequence",
     "WalkTargetSequence",
     "SquatSequence",
+    "HandSequence",
     "DefaultSequence",
 ]
