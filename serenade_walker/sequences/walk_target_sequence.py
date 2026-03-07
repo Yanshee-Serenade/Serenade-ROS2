@@ -17,6 +17,7 @@ class State(Enum):
     WALK = 2
     TURN_LEFT = 3
     TURN_RIGHT = 4
+    TOUCH = 5
 
 
 class WalkTargetSequence(BaseSequence):
@@ -33,31 +34,19 @@ class WalkTargetSequence(BaseSequence):
     def _initialize_steps(self):
         """Initialize walk steps."""
         self.steps_walk = [
-            GaitStep((-0.02, 0.06, 0.03), (0.02, 0.06, -0.01))
-            .set_left_lean(15)
-            .set_right_lean(15)
-            .set_neck(5)
+            GaitStep((-0.02, 0.06, 0.02), (0.02, 0.06, -0.02))
             .set_right_ankle_lean(-3)
             .set_left_arm(-45)
             .set_right_arm(45),
-            GaitStep((-0.02, 0.06, 0.03), (0.02, 0.06, -0.01))
-            .set_left_lean(15)
-            .set_right_lean(15)
-            .set_neck(5)
+            GaitStep((-0.02, 0.06, 0.02), (0.02, 0.06, -0.02))
             .set_left_ankle_lean(-3)
             .set_left_arm(-45)
             .set_right_arm(45),
-            GaitStep((-0.02, 0.06, -0.01), (0.02, 0.06, 0.03))
-            .set_left_lean(15)
-            .set_right_lean(15)
-            .set_neck(-5)
+            GaitStep((-0.02, 0.06, -0.02), (0.02, 0.06, 0.02))
             .set_left_ankle_lean(-3)
             .set_left_arm(45)
             .set_right_arm(-45),
-            GaitStep((-0.02, 0.06, -0.01), (0.02, 0.06, 0.03))
-            .set_left_lean(15)
-            .set_right_lean(15)
-            .set_neck(-5)
+            GaitStep((-0.02, 0.06, -0.02), (0.02, 0.06, 0.02))
             .set_right_ankle_lean(-3)
             .set_left_arm(45)
             .set_right_arm(-45),
@@ -70,6 +59,7 @@ class WalkTargetSequence(BaseSequence):
             GaitStep((-0.02, 0.06, 0.0), (0.02, 0.06, 0.0)),
             GaitStep((-0.04, 0.06, 0.02), (0.04, 0.06, -0.02)),
         ]
+        self.step_touch = GaitStep()
 
     def get_step(self, step_index: int) -> GaitStep:
         """
@@ -83,6 +73,7 @@ class WalkTargetSequence(BaseSequence):
         """
 
         # Get next state
+        has_target = False
         if self.walker.target == TARGET_LEFT:
             next_state = State.TURN_LEFT
         elif self.walker.target == TARGET_RIGHT:
@@ -91,7 +82,6 @@ class WalkTargetSequence(BaseSequence):
             next_state = State.IDLE
         else:
             # Check if target exists
-            has_target = False
             if self.walker.marker_array is not None:
                 for marker in self.walker.marker_array.markers:
                     marker: Marker = marker
@@ -124,32 +114,22 @@ class WalkTargetSequence(BaseSequence):
                 self.walker.target = TARGET_NONE
                 next_state = State.IDLE
         
-        # Transfer state
-        if self.state != next_state:
-            old_state = self.state
-            self.state = next_state
-            self.last_index = 0
-            print(f"State changed from {old_state} to {next_state}", flush=True)
-
-        # Apply state
-        if self.state == State.TURN_LEFT:
-            step = self.steps_turn_left[(step_index - self.last_index) % len(self.steps_turn_left)]
-            return step
-        elif self.state == State.TURN_RIGHT:
-            step = self.steps_turn_right[(step_index - self.last_index) % len(self.steps_turn_right)]
-            return step
-        elif self.state == State.WALK:
-            step = self.steps_walk[(step_index - self.last_index) % len(self.steps_walk)]
-            MAX_CORRECTION = 0.005  # Meters
-            K = 4
-            right_spin = 0.0
-
+        # Calculate spin factor
+        MAX_CORRECTION = 0.005  # Meters
+        TURN_THRES = 0.02
+        TOUCH_THRES = 0.1
+        K = 4
+        right_spin = 0.0
+        dist = 0.0
+        if has_target:
             # 计算从原点(0,0,0)到target_position的圆弧曲率
             # 初始方向是+z轴，所以这是一个在x-z平面上的圆弧运动
             x = self.target_position[0]  # 横向偏移
             z = self.target_position[2]  # 前进距离
+            dist = float(np.sqrt(x*x + z*z))
+            print(f"Dist = {dist}", flush=True)
 
-            if z != 0:
+            if z > 0:
                 # 对于初始方向为+z，终点为(x,z)的圆弧:
                 # 圆心在(0,R)，半径为R
                 # 满足: x² + (z-R)² = R²
@@ -163,14 +143,43 @@ class WalkTargetSequence(BaseSequence):
 
                 # 使用曲率计算right_spin
                 right_spin = curvature * K * MAX_CORRECTION
+                print(f"Right spin = {right_spin}", flush=True)
+        if dist < TOUCH_THRES:
+            next_state = State.TOUCH
+        elif right_spin < -TURN_THRES:
+            next_state = State.TURN_LEFT
+        elif right_spin > TURN_THRES:
+            next_state = State.TURN_RIGHT
+        else:
+            next_state = State.WALK
+        
+        # Transfer state
+        if self.state != next_state:
+            old_state = self.state
+            self.state = next_state
+            self.last_index = 0
+            print(f"State changed from {old_state} to {next_state}", flush=True)
 
-            else:
-                # 如果z=0，使用最大转向
-                right_spin = MAX_CORRECTION if x > 0 else -MAX_CORRECTION
-
-            # 限制在[-MAX_CORRECTION, MAX_CORRECTION]范围内
+        # Apply state
+        if self.state == State.TOUCH:
+            new_step = self.step_touch.copy()
+            if has_target:
+                new_step.right_arm = (
+                    self.target_position[0],
+                    self.target_position[1] + 0.355,  # Height of camera
+                    self.target_position[2]
+                )
+            return new_step
+        elif self.state == State.TURN_LEFT:
+            step = self.steps_turn_left[(step_index - self.last_index) % len(self.steps_turn_left)]
+            return step
+        elif self.state == State.TURN_RIGHT:
+            step = self.steps_turn_right[(step_index - self.last_index) % len(self.steps_turn_right)]
+            return step
+        elif self.state == State.WALK:
+            step = self.steps_walk[(step_index - self.last_index) % len(self.steps_walk)]
+            
             right_spin = max(min(right_spin, MAX_CORRECTION), -MAX_CORRECTION)
-            print(f"Right spin = {right_spin}", flush=True)
 
             # Calculate phase for offset logic (0-3 for walk sequence)
             phase = (step_index - self.last_index) % 4

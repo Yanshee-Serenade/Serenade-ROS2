@@ -83,32 +83,6 @@ def generate_launch_description():
         }.items()
     )
     
-    # VLM Server launch
-    vlm_server_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([serenade_pkg, 'launch', 'vlm_server.launch.py'])
-        ),
-        launch_arguments={
-            'image_topic': '/yolo_world/annotated_image',
-            'model_name': LaunchConfiguration('model_name'),
-            'max_new_tokens': LaunchConfiguration('max_new_tokens')
-        }.items()
-    )
-    
-    # Chatbot launch
-    chatbot_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([serenade_pkg, 'launch', 'chatbot.launch.py'])
-        )
-    )
-    
-    # Walker launch
-    walker_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([serenade_pkg, 'launch', 'walker.launch.py'])
-        )
-    )
-    
     # RViz2 - only launch if requested
     rviz_config_path = PathJoinSubstitution([
         depth_pkg, 'rviz', 'depth_view.rviz'
@@ -136,9 +110,6 @@ def generate_launch_description():
         # Launch components
         depth_launch,
         yolo_launch,
-        vlm_server_launch,
-        chatbot_launch,
-        walker_launch,
         
         # RViz
         rviz_node

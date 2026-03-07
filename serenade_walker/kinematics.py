@@ -153,7 +153,6 @@ class KinematicsSolver:
             angles,
             ctypes.byref(error),
         )
-        print(f"Error: {float(error.value)}, Valid: {result}", flush=True)
 
         if result == 1:
             angles_degrees = [

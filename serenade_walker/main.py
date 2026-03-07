@@ -110,8 +110,8 @@ def main(args=None):
     # Run walking indefinitely in the MAIN thread
     try:
         node.get_logger().info("Starting infinite walking sequence...")
-        # walk_sequence = sequences.WalkTargetSequence(backward=False)
-        walk_sequence = sequences.HandSequence()
+        walk_sequence = sequences.WalkTargetSequence(backward=False)
+        # walk_sequence = sequences.HandSequence()
         
         while rclpy.ok():
             # Run the walking sequence repeatedly
